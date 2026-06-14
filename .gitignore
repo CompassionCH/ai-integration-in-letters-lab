@@ -1,0 +1,40 @@
+# Secrets and runtime config
+.env
+.env.local
+.env.*.local
+
+# Database
+*.db
+*.db-journal
+
+# Letter corpus — contains real first names + ground truth labels
+# Note: letters/corpus.example.json is intentionally tracked as a template.
+letters/**/*.pdf
+letters/corpus.json
+letters/real/
+letters/synthetic/
+
+# Gemini pre-processing outputs (contain translations, alert reasons)
+pre_processing/results/
+
+# Build artefacts
+static/css/app.css
+static/vendor/
+bin/
+
+# OS / editor
+.DS_Store
+.claude/
+CLAUDE.md
+.idea/
+.vscode/
+
+# Sample / accidental exports
+exports/
+*.csv
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/

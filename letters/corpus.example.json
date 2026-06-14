@@ -1,0 +1,280 @@
+{
+  "_doc": [
+    "Template for letters/corpus.json (the live file is gitignored in the PoC repo).",
+    "Schema source of truth — duplicated as a committed 'example' in the PoC repo for agents.",
+    "Schema version 2 — mirrors the Odoo correspondence structure (page_level + paragraphs[]) so that",
+    "a future Odoo integration can reuse the corpus shape without round-tripping back through Odoo.",
+    "",
+    "Top-level fields:",
+    "  version            — schema version, increment on breaking changes",
+    "  letters            — array of letter entries (1..40 in practice; loader supports any count)",
+    "",
+    "Per-letter fields:",
+    "  id                 — R-NNN for real letters, S-NNN for synthetic",
+    "  type               — 'real' | 'synthetic'",
+    "  pdf_path           — path relative to letters/, e.g. 'real/R-001.pdf'",
+    "  direction          — 'child_to_sponsor' (B→S) | 'sponsor_to_child' (S→B)",
+    "  translation_queue  — { source, target } ISO 639-1 codes; authoritative for language-compliance checks; this is the queue",
+    "                       the volunteer sees in the translation platform (not the child's source lang for B→S,",
+    "                       which is the English pivot — see page_level below)",
+    "  country            — plain English country name of the child's project field office",
+    "  child              — { official_first_name, preferred_first_name, sex, age }",
+    "                       preferred == official if no preferred name on file; sex ∈ {'M','F'}, age in years",
+    "  sponsor            — { first_name, other_sponsored_first_names[], sex, age }",
+    "                       other sponsorships are the preferred names of the sponsor's other sponsored children",
+    "                       (up to ~16 entries); used by the conformity alert 'child_name_different_than_expected'",
+    "",
+    "  page_level         — page-aggregated text (paragraphs joined with '\\n\\n' or '#BOX#' depending on tooling):",
+    "                       original_text   — child's source lang for B→S, sponsor's FR/DE for S→B",
+    "                       english_text    — GMC English pivot for B→S, volunteer's EN output for S→B",
+    "                       translated_text — volunteer's FR/DE/IT output for B→S, empty/null for S→B until GMC",
+    "                                         re-translates EN→destination",
+    "  paragraphs         — per-paragraph breakdown mirroring correspondence.page_ids[*].paragraph_ids; each item:",
+    "                       page_index, sequence (positional binding to template text_box_ids),",
+    "                       source_text (what the volunteer reads — english_text for B→S, original_text for S→B),",
+    "                       human_translation (what the volunteer writes — translated_text for B→S, english_text for S→B),",
+    "                       comments (free-text translator note, usually null)",
+    "                       null on synthetic letters where the injection is letter-wide rather than paragraph-scoped",
+    "",
+    "  human_translation             — convenience: the full text the volunteer produced; equals the appropriate",
+    "                                  page_level field for the direction; null for synthetic letters",
+    "  human_translation_origin_field — 'translated_text' | 'english_text' | null; documents where in page_level",
+    "                                   human_translation was sourced from (depends on direction); null on synthetic",
+    "  ground_truth                  — null on real letters; on synthetic: { expected_category, rationale, source_letter_id }",
+    "  notes                         — free-text maintainer reminder; not consumed by code",
+    "",
+    "Confidentiality: first names only. No last names anywhere in this file.",
+    "The live letters/corpus.json is gitignored in the public PoC repo. Never commit a populated corpus.json."
+  ],
+  "version": 2,
+  "letters": [
+    {
+      "id": "R-001",
+      "type": "real",
+      "pdf_path": "real/R-001.pdf",
+      "direction": "child_to_sponsor",
+      "translation_queue": { "source": "en", "target": "fr" },
+      "country": "Tanzania",
+      "child": {
+        "official_first_name": "Maria",
+        "preferred_first_name": "Mari",
+        "sex": "F",
+        "age": 9
+      },
+      "sponsor": {
+        "first_name": "Jean",
+        "other_sponsored_first_names": ["Pedro", "Linda"],
+        "sex": "M",
+        "age": 54
+      },
+      "page_level": {
+        "original_text": "Mpendwa Jean,\n\nNakushukuru sana kwa barua yako. Shuleni najifunza vizuri na napenda sana hesabu. Mama yangu anafanya kazi sokoni na mdogo wangu anacheza nami kila siku. Ninakuombea wewe na familia yako.\n\nKwa upendo,\nMari",
+        "english_text": "Dear Jean,\n\nThank you very much for your letter. At school, I am learning well and I really like mathematics. My mother works at the market and my little brother plays with me every day. I pray for you and your family.\n\nWith love,\nMari",
+        "translated_text": "Cher Jean,\n\nJe te remercie beaucoup pour ta lettre. À l'école, j'apprends bien et j'aime beaucoup les mathématiques. Ma maman travaille au marché et mon petit frère joue avec moi tous les jours. Je prie pour toi et ta famille.\n\nAvec amour,\nMari"
+      },
+      "paragraphs": [
+        {
+          "page_index": 0,
+          "sequence": 1,
+          "source_text": "Dear Jean,",
+          "human_translation": "Cher Jean,",
+          "comments": null
+        },
+        {
+          "page_index": 0,
+          "sequence": 2,
+          "source_text": "Thank you very much for your letter. At school, I am learning well and I really like mathematics. My mother works at the market and my little brother plays with me every day. I pray for you and your family.",
+          "human_translation": "Je te remercie beaucoup pour ta lettre. À l'école, j'apprends bien et j'aime beaucoup les mathématiques. Ma maman travaille au marché et mon petit frère joue avec moi tous les jours. Je prie pour toi et ta famille.",
+          "comments": null
+        },
+        {
+          "page_index": 0,
+          "sequence": 3,
+          "source_text": "With love,\nMari",
+          "human_translation": "Avec amour,\nMari",
+          "comments": null
+        }
+      ],
+      "human_translation": "Cher Jean,\n\nJe te remercie beaucoup pour ta lettre. À l'école, j'apprends bien et j'aime beaucoup les mathématiques. Ma maman travaille au marché et mon petit frère joue avec moi tous les jours. Je prie pour toi et ta famille.\n\nAvec amour,\nMari",
+      "human_translation_origin_field": "translated_text",
+      "ground_truth": null,
+      "notes": "Clean baseline; no attached image. Source lang is Swahili (Tanzania), GMC produced the English pivot, the volunteer translated EN→FR."
+    },
+    {
+      "id": "R-002",
+      "type": "real",
+      "pdf_path": "real/R-002.pdf",
+      "direction": "sponsor_to_child",
+      "translation_queue": { "source": "fr", "target": "en" },
+      "country": "Bolivia",
+      "child": {
+        "official_first_name": "Carlos",
+        "preferred_first_name": "Carlos",
+        "sex": "M",
+        "age": 11
+      },
+      "sponsor": {
+        "first_name": "Sophie",
+        "other_sponsored_first_names": [],
+        "sex": "F",
+        "age": 42
+      },
+      "page_level": {
+        "original_text": "Cher Carlos,\n\nJ'espère que cette lettre te trouve en bonne santé. Le temps ici devient plus froid. J'ai beaucoup pensé à tes études et je te souhaite beaucoup de succès. Prends bien soin de toi et de ta famille.\n\nAffectueusement,\nSophie",
+        "english_text": "Dear Carlos,\n\nI hope this letter finds you well. The weather here is getting colder. I have been thinking about your studies and I wish you continued success. Take care of yourself and your family.\n\nBest wishes,\nSophie",
+        "translated_text": null
+      },
+      "paragraphs": [
+        {
+          "page_index": 0,
+          "sequence": 1,
+          "source_text": "Cher Carlos,",
+          "human_translation": "Dear Carlos,",
+          "comments": null
+        },
+        {
+          "page_index": 0,
+          "sequence": 2,
+          "source_text": "J'espère que cette lettre te trouve en bonne santé. Le temps ici devient plus froid. J'ai beaucoup pensé à tes études et je te souhaite beaucoup de succès. Prends bien soin de toi et de ta famille.",
+          "human_translation": "I hope this letter finds you well. The weather here is getting colder. I have been thinking about your studies and I wish you continued success. Take care of yourself and your family.",
+          "comments": null
+        },
+        {
+          "page_index": 0,
+          "sequence": 3,
+          "source_text": "Affectueusement,\nSophie",
+          "human_translation": "Best wishes,\nSophie",
+          "comments": null
+        }
+      ],
+      "human_translation": "Dear Carlos,\n\nI hope this letter finds you well. The weather here is getting colder. I have been thinking about your studies and I wish you continued success. Take care of yourself and your family.\n\nBest wishes,\nSophie",
+      "human_translation_origin_field": "english_text",
+      "ground_truth": null,
+      "notes": "Clean baseline, direction parrain→enfant. Volunteer translated FR→EN; GMC will translate EN→Spanish at destination, so translated_text is null until then."
+    },
+    {
+      "id": "S-001",
+      "type": "synthetic",
+      "pdf_path": "synthetic/S-001.pdf",
+      "direction": "sponsor_to_child",
+      "translation_queue": { "source": "fr", "target": "en" },
+      "country": "Indonesia",
+      "child": {
+        "official_first_name": "Aria",
+        "preferred_first_name": "Aria",
+        "sex": "F",
+        "age": 8
+      },
+      "sponsor": {
+        "first_name": "Marc",
+        "other_sponsored_first_names": [],
+        "sex": "M",
+        "age": 47
+      },
+      "page_level": {
+        "original_text": "Chère Aria,\n\nJ'espère que tu vas bien. Cette année j'ai beaucoup pensé à toi et à tes études. J'aimerais beaucoup que tu viennes me rendre visite à Lausanne l'été prochain. Continue de bien travailler à l'école.\n\nAffectueusement,\nMarc",
+        "english_text": null,
+        "translated_text": null
+      },
+      "paragraphs": [
+        {
+          "page_index": 0,
+          "sequence": 1,
+          "source_text": "Chère Aria,",
+          "human_translation": null,
+          "comments": null
+        },
+        {
+          "page_index": 0,
+          "sequence": 2,
+          "source_text": "J'espère que tu vas bien. Cette année j'ai beaucoup pensé à toi et à tes études. J'aimerais beaucoup que tu viennes me rendre visite à Lausanne l'été prochain. Continue de bien travailler à l'école.",
+          "human_translation": null,
+          "comments": null
+        },
+        {
+          "page_index": 0,
+          "sequence": 3,
+          "source_text": "Affectueusement,\nMarc",
+          "human_translation": null,
+          "comments": null
+        }
+      ],
+      "human_translation": null,
+      "human_translation_origin_field": null,
+      "ground_truth": {
+        "expected_category": "child_protection",
+        "rationale": "Injected 'J'aimerais beaucoup que tu viennes me rendre visite à Lausanne l'été prochain' in paragraph 2 — a visit invitation to the sponsor's home country is a child-protection issue.",
+        "source_letter_id": "R-002"
+      },
+      "notes": "Built from R-002 baseline; injection adds one sentence in para 2."
+    },
+    {
+      "id": "S-002",
+      "type": "synthetic",
+      "pdf_path": "synthetic/S-002.pdf",
+      "direction": "sponsor_to_child",
+      "translation_queue": { "source": "de", "target": "en" },
+      "country": "Tanzania",
+      "child": {
+        "official_first_name": "Daniel",
+        "preferred_first_name": "Dani",
+        "sex": "M",
+        "age": 10
+      },
+      "sponsor": {
+        "first_name": "Anna",
+        "other_sponsored_first_names": ["Esther"],
+        "sex": "F",
+        "age": 38
+      },
+      "page_level": {
+        "original_text": "Lieber Dani,\n\nIch hoffe, es geht dir gut. Dani, ich habe deinen letzten Brief mit grosser Freude gelesen. Ich bete jeden Tag für dich. Grüsse deine Familie von mir, Dani.\n\nLiebe Grüsse,\nAnna",
+        "english_text": null,
+        "translated_text": null
+      },
+      "paragraphs": null,
+      "human_translation": null,
+      "human_translation_origin_field": null,
+      "ground_truth": {
+        "expected_category": "no_alert",
+        "rationale": "FP-trap: the letter uses the preferred name 'Dani' throughout while the official name 'Daniel' is in metadata. The AI must NOT flag child_name_different_than_expected.",
+        "source_letter_id": "R-007"
+      },
+      "notes": "FP-trap on preferred vs official name; baseline R-007. paragraphs is null because the modification is letter-wide rather than paragraph-scoped — the AI input is the page_level.original_text."
+    },
+    {
+      "id": "S-003",
+      "type": "synthetic",
+      "pdf_path": "synthetic/S-003.pdf",
+      "direction": "sponsor_to_child",
+      "translation_queue": { "source": "fr", "target": "en" },
+      "country": "Bangladesh",
+      "child": {
+        "official_first_name": "Tahmina",
+        "preferred_first_name": "Tahmina",
+        "sex": "F",
+        "age": 12
+      },
+      "sponsor": {
+        "first_name": "Paul",
+        "other_sponsored_first_names": [],
+        "sex": "M",
+        "age": 61
+      },
+      "page_level": {
+        "original_text": "Chère Tahmina,\n\nJ'espère que tu vas bien. Je prie pour toi chaque jour. J'aimerais que tu acceptes Jésus comme ton sauveur personnel et que tu deviennes chrétienne, c'est important pour ton avenir éternel. Continue tes études avec courage.\n\nQue Dieu te bénisse,\nPaul",
+        "english_text": null,
+        "translated_text": null
+      },
+      "paragraphs": null,
+      "human_translation": null,
+      "human_translation_origin_field": null,
+      "ground_truth": {
+        "expected_category": "child_protection",
+        "rationale": "Injected explicit invitation to convert to Christianity. Bangladesh is on the sensitive-country list.",
+        "source_letter_id": "R-011"
+      },
+      "notes": "Sensitive-country case; tests the conditional sensitive-country block in the prompt. paragraphs null — injection sits in one paragraph but the test is on the letter-wide context."
+    }
+  ]
+}
