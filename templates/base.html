@@ -4,12 +4,51 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
-  <title>{% block title %}Open Letter Lab{% endblock %}</title>
+  <title>{% block title %}Compassion Letter Lab{% endblock %}</title>
   <link rel="icon" type="image/png" href="/static/branding/favicon.png">
   <link rel="stylesheet" href="/static/css/app.css">
   <script src="/static/vendor/htmx.min.js" defer></script>
 </head>
 <body class="min-h-screen bg-slate-100 font-sans text-slate-800">
+  <header class="sticky top-0 z-20 flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-4 py-2 shadow-sm">
+    {# Brand: the logo if the asset is present, else its alt text "Compassion Letter Lab". #}
+    <a href="/" class="flex shrink-0 items-center" aria-label="Compassion Letter Lab — home">
+      <img src="/static/branding/logo.png" alt="Compassion Letter Lab" class="h-8 w-auto">
+    </a>
+
+    <div class="flex items-center gap-4">
+      {# Progress slot — only on pages that pass n_done / n_total (the evaluation flow). #}
+      {% if n_total is defined and n_total %}
+      <div class="flex items-center gap-2 text-sm text-slate-500" aria-label="Progress">
+        <span class="whitespace-nowrap">Letter {{ n_done | default(0) }} / {{ n_total }}</span>
+        <span class="block h-1.5 w-24 overflow-hidden rounded-full bg-slate-200">
+          <span class="block h-full rounded-full bg-compassion"
+                style="width: {{ ((n_done | default(0)) / n_total * 100) | round }}%"></span>
+        </span>
+      </div>
+      {% endif %}
+
+      {# Session-aware controls — shown only when a session cookie is present. #}
+      {% if request.cookies.get('session_id') %}
+      <nav class="flex items-center gap-3 text-sm">
+        <a href="/session/languages" class="font-medium text-compassion hover:underline">My languages</a>
+        {# A real form so sign-out works without JS. #}
+        <form method="post" action="/session/signout">
+          <button type="submit" class="text-slate-500 hover:text-slate-800 hover:underline">Sign out</button>
+        </form>
+      </nav>
+      {% endif %}
+    </div>
+  </header>
+
+  {# Flash slot — rotating thank-you banner; content + trigger set by the evaluation page.
+     Dormant until a page passes `flash`. Auto-fades via the .flash-banner animation. #}
+  {% if flash %}
+  <div class="flash-banner border-b border-compassion/20 bg-compassion/10 px-4 py-2 text-center text-sm text-compassion" role="status">
+    {{ flash }}
+  </div>
+  {% endif %}
+
   {% block body %}{% endblock %}
 </body>
 </html>

@@ -11,3 +11,20 @@
      the system sans stack. */
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
+
+/* Inter, self-hosted (woff2, latin subset) — fetched by scripts/install_fonts.sh.
+   font-display: swap renders the system fallback immediately, then swaps in Inter. */
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 300; font-display: swap; src: url("/static/fonts/inter-300.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 400; font-display: swap; src: url("/static/fonts/inter-400.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 500; font-display: swap; src: url("/static/fonts/inter-500.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 600; font-display: swap; src: url("/static/fonts/inter-600.woff2") format("woff2"); }
+
+/* Flash banner (the post-submit thank-you): stays for a moment, then fades out.
+   Opacity-only so the background fades with it — no leftover coloured strip. No JS. */
+@keyframes flash-fade {
+  0%, 65% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.flash-banner {
+  animation: flash-fade 6s ease-out forwards;
+}
