@@ -27,7 +27,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
 import security
-from routes import health, pages
+from routes import health, pages, session
 
 app = FastAPI(title="Open Letter Lab")
 
@@ -41,5 +41,6 @@ app.add_middleware(BaseHTTPMiddleware, dispatch=security.security_headers)
 
 app.include_router(health.router)
 app.include_router(pages.router)
+app.include_router(session.router)
 
 logger.info("Application configured (cookie_secure=%s)", config.cookie_secure())

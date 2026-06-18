@@ -95,7 +95,7 @@ def test_seed_inserts_connected_rows(seed):
 def test_preference_check_rejects_invalid(tmp_db):
     conn = connect(tmp_db)
     try:
-        conn.execute("INSERT INTO sessions (first_name) VALUES ('A')")
+        conn.execute("INSERT INTO sessions (session_token, first_name) VALUES ('s1', 'A')")
         conn.execute("INSERT INTO letters (target_lang) VALUES ('fr')")
         conn.execute(
             "INSERT INTO ai_responses (letter_id, prompt_version, model) VALUES (1, 'v1', 'm')"
@@ -115,5 +115,24 @@ def test_display_ref_unique(tmp_db):
         conn.execute("INSERT INTO letters (display_ref) VALUES ('dup00001')")
         with pytest.raises(sqlite3.IntegrityError):
             conn.execute("INSERT INTO letters (display_ref) VALUES ('dup00001')")
+    finally:
+        conn.close()
+
+
+def test_sessions_has_session_token_column(tmp_db):
+    conn = connect(tmp_db)
+    try:
+        cols = {row["name"] for row in conn.execute("PRAGMA table_info(sessions)").fetchall()}
+        assert "session_token" in cols
+    finally:
+        conn.close()
+
+
+def test_session_token_is_unique(tmp_db):
+    conn = connect(tmp_db)
+    try:
+        conn.execute("INSERT INTO sessions (session_token, first_name) VALUES ('tok-1', 'A')")
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute("INSERT INTO sessions (session_token, first_name) VALUES ('tok-1', 'B')")
     finally:
         conn.close()

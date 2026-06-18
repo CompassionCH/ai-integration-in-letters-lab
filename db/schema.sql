@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS ai_response_paragraphs (
 
 CREATE TABLE IF NOT EXISTS sessions (
     id               INTEGER PRIMARY KEY,
+    session_token    TEXT NOT NULL UNIQUE,
     first_name       TEXT,
     last_name        TEXT,
     source_langs_csv TEXT,

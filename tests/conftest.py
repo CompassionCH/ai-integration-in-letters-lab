@@ -49,8 +49,8 @@ def seed(tmp_db):
             )
             ai_response_id = cur.lastrowid
             cur.execute(
-                "INSERT INTO sessions (first_name, target_langs_csv) VALUES (?, ?)",
-                ("Alex", "fr"),
+                "INSERT INTO sessions (session_token, first_name, target_langs_csv) VALUES (?, ?, ?)",
+                ("seed-session-token", "Alex", "fr"),
             )
             session_id = cur.lastrowid
             cur.execute(
@@ -74,9 +74,21 @@ def seed(tmp_db):
 
 @pytest.fixture
 async def client():
-    """An httpx.AsyncClient bound to the ASGI app."""
+    """An httpx.AsyncClient bound to the ASGI app (un-invited — sees the stub)."""
     from main import app
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as c:
+        yield c
+
+
+@pytest.fixture
+async def invited_client():
+    """An httpx.AsyncClient that has passed the invite-token perimeter gate."""
+    from main import app
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as c:
+        # The query token sets the invite cookie (stored in the jar for later requests).
+        await c.get("/", params={"invite": "test-invite-token"})
         yield c
