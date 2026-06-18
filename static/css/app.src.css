@@ -1,0 +1,13 @@
+/* Tailwind v4 input — compiled to app.css by the standalone CLI (see Makefile and
+   scripts/install_tailwind.sh). v4 is CSS-first: the project theme lives here,
+   not in a JS config file. Content sources are auto-detected from the project. */
+@import "tailwindcss";
+
+@theme {
+  /* Compassion brand color — drives bg-compassion / text-compassion / ring-compassion. */
+  --color-compassion: #005eb8;
+
+  /* Inter is self-hosted later; until those woff2 files exist this falls back to
+     the system sans stack. */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+}

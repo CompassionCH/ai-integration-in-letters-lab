@@ -1,0 +1,11 @@
+# Tool configuration only — this project is run, not packaged.
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.pyright]
+# Resolve imports against the project virtualenv.
+venvPath = "."
+venv = ".venv"
