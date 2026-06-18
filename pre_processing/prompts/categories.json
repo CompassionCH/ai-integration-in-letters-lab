@@ -1,0 +1,13 @@
+[
+  { "id": "no_alert",                "label_en": "No issue",                              "selectable_for_missed": false },
+  { "id": "broken_pdf",              "label_en": "PDF not showing",                       "selectable_for_missed": true },
+  { "id": "text_unreadable",         "label_en": "Cannot read properly",                  "selectable_for_missed": true },
+  { "id": "wrong_language",          "label_en": "Letter in wrong language queue",        "selectable_for_missed": true },
+  { "id": "child_protection",        "label_en": "Child protection issue",                "selectable_for_missed": true },
+  { "id": "content_inappropriate",   "label_en": "Inappropriate content",                 "selectable_for_missed": true },
+  { "id": "wrong_child_name",        "label_en": "Child name different than expected",    "selectable_for_missed": true },
+  { "id": "wrong_sponsor_name",      "label_en": "Sponsor name different than expected",  "selectable_for_missed": true },
+  { "id": "invalid_layout",          "label_en": "Wrong translation boxes layout",        "selectable_for_missed": true },
+  { "id": "other",                   "label_en": "Other issue",                           "selectable_for_missed": true },
+  { "id": "safety_filter_triggered", "label_en": "Safety filter triggered",               "selectable_for_missed": false }
+]

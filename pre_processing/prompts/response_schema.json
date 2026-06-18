@@ -1,0 +1,54 @@
+{
+  "type": "OBJECT",
+  "required": ["translations", "alert"],
+  "propertyOrdering": ["translations", "alert"],
+  "properties": {
+    "translations": {
+      "type": "ARRAY",
+      "description": "One entry per source paragraph, in the order the paragraphs were enumerated in the prompt.",
+      "items": {
+        "type": "OBJECT",
+        "required": ["sequence", "text"],
+        "propertyOrdering": ["sequence", "text"],
+        "properties": {
+          "sequence": {
+            "type": "INTEGER",
+            "description": "1-based index of the source paragraph as numbered in the prompt. The loader maps it back to the corpus (page_index, sequence)."
+          },
+          "text": {
+            "type": "STRING",
+            "description": "Translation of that paragraph into the target language. The ONLY field that is not in English."
+          }
+        }
+      }
+    },
+    "alert": {
+      "type": "OBJECT",
+      "required": ["category", "reason"],
+      "propertyOrdering": ["category", "reason"],
+      "properties": {
+        "category": {
+          "type": "STRING",
+          "enum": [
+            "no_alert",
+            "broken_pdf",
+            "text_unreadable",
+            "wrong_language",
+            "child_protection",
+            "content_inappropriate",
+            "wrong_child_name",
+            "wrong_sponsor_name",
+            "invalid_layout",
+            "other",
+            "safety_filter_triggered"
+          ],
+          "description": "Exactly one category per letter. 'no_alert' when nothing is wrong. Secondary issues go inline in 'reason'. 'safety_filter_triggered' is never chosen by the model — the runner synthesizes it on an API refusal; it stays in the enum so this list equals categories.json."
+        },
+        "reason": {
+          "type": "STRING",
+          "description": "Short English justification for the category. For 'no_alert', a brief 'No issue detected.'"
+        }
+      }
+    }
+  }
+}
