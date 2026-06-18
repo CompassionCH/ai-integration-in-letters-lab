@@ -81,8 +81,10 @@ CREATE TABLE IF NOT EXISTS votes (
     session_id         INTEGER NOT NULL REFERENCES sessions(id),
     letter_id          INTEGER NOT NULL REFERENCES letters(id),
     ai_response_id     INTEGER NOT NULL REFERENCES ai_responses(id),
-    preference         TEXT NOT NULL CHECK (preference IN ('A', 'B', 'Equivalent')),
-    a_is_ai            INTEGER NOT NULL CHECK (a_is_ai IN (0, 1)),
+    -- preference / a_is_ai are NULL for synthetic letters (no human translation -> no
+    -- A/B card); set for real letters. The CHECK still constrains the non-NULL values.
+    preference         TEXT CHECK (preference IN ('A', 'B', 'Equivalent')),
+    a_is_ai            INTEGER CHECK (a_is_ai IN (0, 1)),
     preference_comment TEXT,
     voted_at           TEXT DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (session_id, letter_id)

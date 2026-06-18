@@ -1,10 +1,13 @@
 """Evaluation flow: serve the next letter + the session-bound letter PDF."""
+from __future__ import annotations
+
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Form, Request
 from fastapi.responses import FileResponse, RedirectResponse, Response
 
+import categories
 import config
 import selection
 from db import connect
@@ -78,6 +81,64 @@ def _voted_ids(conn, session_id):
         "SELECT letter_id FROM votes WHERE session_id = ?", (session_id,)
     ).fetchall()
     return {row["letter_id"] for row in rows}
+
+
+def _persist_evaluation(
+    conn,
+    *,
+    session_id,
+    letter_id,
+    ai_response_id,
+    preference,
+    a_is_ai,
+    preference_comment,
+    alert_verdict,
+    alert_comment,
+    missed_yes,
+    missed_category,
+    missed_reason,
+) -> bool:
+    """Atomically record the vote + (alert verdict when present) + missed-issue.
+
+    Returns True if a new vote was written, False if it was a duplicate — the
+    ``(session_id, letter_id)`` unique constraint makes a resubmit (back button
+    after the PRG redirect) a silent no-op rather than an error. The ``with conn``
+    block commits on success and rolls back on any partial failure.
+    """
+    with conn:
+        cur = conn.execute(
+            "INSERT INTO votes"
+            " (session_id, letter_id, ai_response_id, preference, a_is_ai, preference_comment)"
+            " VALUES (?, ?, ?, ?, ?, ?)"
+            " ON CONFLICT(session_id, letter_id) DO NOTHING",
+            (session_id, letter_id, ai_response_id, preference, a_is_ai, preference_comment),
+        )
+        if cur.rowcount == 0:
+            return False  # duplicate vote for this (session, letter) -> idempotent
+        vote_id = cur.lastrowid
+        if alert_verdict is not None:
+            conn.execute(
+                "INSERT INTO alert_evaluations (vote_id, ai_response_id, verdict, comment)"
+                " VALUES (?, ?, ?, ?)",
+                (vote_id, ai_response_id, alert_verdict, alert_comment),
+            )
+        conn.execute(
+            "INSERT INTO missed_issues (vote_id, missed_yes_no, category, reason)"
+            " VALUES (?, ?, ?, ?)",
+            (vote_id, missed_yes, missed_category, missed_reason),
+        )
+        return True
+
+
+def _reject(request, message: str):
+    """422 with the shared friendly error page. Submit validation should rarely
+    fire — the UI constrains these fields — so this is a defensive backstop."""
+    return templates.TemplateResponse(
+        request=request,
+        name="session_error.html",
+        context={"message": message},
+        status_code=422,
+    )
 
 
 def warn_safety_filtered() -> None:
@@ -181,6 +242,95 @@ async def evaluate(request: Request):
     response = templates.TemplateResponse(request=request, name="evaluate.html", context=context)
     set_session_cookie(response, token)  # sliding refresh
     return response
+
+
+@router.post("/evaluate/submit")
+async def evaluate_submit(
+    request: Request,
+    display_ref: str = Form(...),
+    preference: str | None = Form(default=None),
+    preference_comment: str | None = Form(default=None),
+    alert_verdict: str | None = Form(default=None),
+    alert_comment: str | None = Form(default=None),
+    missed_yes_no: str = Form(...),
+    missed_category: str | None = Form(default=None),
+    missed_reason: str | None = Form(default=None),
+):
+    token = request.cookies.get(SESSION_COOKIE)
+    session = resolve_session(request)  # also bumps last_seen_at (sliding window)
+    if session is None:
+        response = RedirectResponse(url="/", status_code=303)
+        if token:
+            clear_session_cookie(response)
+        return response
+
+    conn = connect()
+    try:
+        active = _active_prompt_version(conn)
+        letter = conn.execute(
+            "SELECT * FROM letters WHERE display_ref = ?", (display_ref,)
+        ).fetchone()
+        if letter is None:
+            return Response(status_code=404)  # opaque: unknown ref, like the PDF route
+        ai = _select_ai_row(conn, letter["id"], active)
+        if ai is None:
+            return Response(status_code=404)  # no servable response to vote on
+
+        is_real = letter["human_translation_text"] is not None
+        has_alert = (ai["alert_category"] or "no_alert") != "no_alert"
+
+        # Preference: required on real letters (A/B card shown); absent on synthetics.
+        if is_real:
+            if preference not in ("A", "B", "Equivalent"):
+                return _reject(request, "Please choose which translation you prefer.")
+            preference_val = preference
+            a_is_ai_val = 1 if selection.a_is_ai(session["id"], letter["id"]) else 0
+        else:
+            preference_val = None
+            a_is_ai_val = None
+
+        # Alert verdict: required iff the served response raised an alert.
+        if has_alert:
+            if alert_verdict not in ("Correct", "Incorrect", "Mixed"):
+                return _reject(request, "Please tell us whether the alert is correct.")
+        elif alert_verdict is not None:
+            return _reject(request, "This letter has no alert to evaluate.")
+
+        # Missed-issue: a required yes/no; details required (+ validated) on "yes".
+        if missed_yes_no not in ("yes", "no"):
+            return _reject(request, "Please tell us whether the AI missed an issue.")
+        if missed_yes_no == "yes":
+            if missed_category not in categories.selectable_for_missed_ids():
+                return _reject(request, "Please choose a valid issue category.")
+            if not (missed_reason and missed_reason.strip()):
+                return _reject(request, "Please describe the issue the AI missed.")
+            missed_category_val, missed_reason_val = missed_category, missed_reason
+        else:
+            missed_category_val = missed_reason_val = None
+
+        recorded = _persist_evaluation(
+            conn,
+            session_id=session["id"],
+            letter_id=letter["id"],
+            ai_response_id=ai["id"],
+            preference=preference_val,
+            a_is_ai=a_is_ai_val,
+            preference_comment=(preference_comment or "").strip() or None,
+            alert_verdict=alert_verdict,
+            alert_comment=(alert_comment or "").strip() or None,
+            missed_yes=1 if missed_yes_no == "yes" else 0,
+            missed_category=missed_category_val,
+            missed_reason=missed_reason_val,
+        )
+
+        # PRG: a fresh vote shows the rotating thank-you (saved=1); an idempotent
+        # resubmit (back button) silently advances without re-thanking.
+        target = "/evaluate?saved=1" if recorded else "/evaluate"
+        response = RedirectResponse(url=target, status_code=303)
+        set_session_cookie(response, token)  # sliding refresh
+        return response
+    finally:
+        conn.close()
 
 
 @router.get("/evaluate/done")
