@@ -1,25 +1,7 @@
-"""Smoke tests for the application skeleton."""
-import os
+"""Smoke tests for the application skeleton.
 
-# The perimeter gate needs an invite token, and the ASGI test client speaks plain
-# HTTP — so make Secure cookies round-trip. Set these before importing the app;
-# config reads the environment lazily, and load_dotenv() will not override them.
-os.environ.setdefault("ACCESS_TOKEN", "test-invite-token")
-os.environ.setdefault("COOKIE_SECURE", "false")
-
-import httpx
-import pytest
-
-from main import app
-
-BASE_URL = "http://testserver"
-
-
-@pytest.fixture
-async def client():
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url=BASE_URL) as c:
-        yield c
+The shared ``client`` fixture and the test environment live in tests/conftest.py.
+"""
 
 
 async def test_health(client):

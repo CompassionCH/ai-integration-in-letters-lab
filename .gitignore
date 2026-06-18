@@ -3,9 +3,11 @@
 .env.local
 .env.*.local
 
-# Database
+# Database (WAL mode adds -wal/-shm sidecars that can hold uncheckpointed real data)
 *.db
 *.db-journal
+*.db-wal
+*.db-shm
 
 # Letter corpus — contains real first names + ground truth labels
 # Note: letters/corpus.example.json is intentionally tracked as a template.
