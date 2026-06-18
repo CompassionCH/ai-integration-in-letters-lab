@@ -22,6 +22,46 @@ def _has_supported_lang(langs: list[str]) -> bool:
     return any(lang in SUPPORTED_LANGS for lang in langs)
 
 
+def set_session_cookie(response, token: str) -> None:
+    """Set (or refresh, for the sliding 30-day window) the session_id cookie."""
+    response.set_cookie(
+        key=SESSION_COOKIE,
+        value=token,
+        max_age=SESSION_COOKIE_MAX_AGE,
+        httponly=True,
+        secure=config.cookie_secure(),
+        samesite="lax",
+        path="/",
+    )
+
+
+def clear_session_cookie(response) -> None:
+    response.delete_cookie(key=SESSION_COOKIE, path="/")
+
+
+def resolve_session(request: Request):
+    """Return the sessions row for the request's session_id cookie, bumping
+    last_seen_at (the sliding window's server side); None if there is no cookie
+    or no matching session row."""
+    token = request.cookies.get(SESSION_COOKIE)
+    if not token:
+        return None
+    conn = connect()
+    try:
+        row = conn.execute(
+            "SELECT * FROM sessions WHERE session_token = ?", (token,)
+        ).fetchone()
+        if row is not None:
+            conn.execute(
+                "UPDATE sessions SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (row["id"],),
+            )
+            conn.commit()
+        return row
+    finally:
+        conn.close()
+
+
 @router.post("/session/start")
 async def session_start(
     request: Request,
@@ -60,20 +100,12 @@ async def session_start(
     logger.info("Session started (langs %s -> %s)", source_langs, target_langs)
 
     response = RedirectResponse(url="/evaluate", status_code=303)
-    response.set_cookie(
-        key=SESSION_COOKIE,
-        value=token,
-        max_age=SESSION_COOKIE_MAX_AGE,
-        httponly=True,
-        secure=config.cookie_secure(),
-        samesite="lax",
-        path="/",
-    )
+    set_session_cookie(response, token)
     return response
 
 
 @router.post("/session/signout")
 async def session_signout():
     response = RedirectResponse(url="/", status_code=303)
-    response.delete_cookie(key=SESSION_COOKIE, path="/")
+    clear_session_cookie(response)
     return response

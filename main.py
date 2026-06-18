@@ -22,14 +22,24 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # 3) Build the app.
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
 import security
-from routes import health, pages, session
+from routes import evaluate, health, pages, session
 
-app = FastAPI(title="Open Letter Lab")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: warn about letters a safety filter excludes from serving (best-effort).
+    evaluate.warn_safety_filtered()
+    yield
+
+
+app = FastAPI(title="Open Letter Lab", lifespan=lifespan)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -42,5 +52,6 @@ app.add_middleware(BaseHTTPMiddleware, dispatch=security.security_headers)
 app.include_router(health.router)
 app.include_router(pages.router)
 app.include_router(session.router)
+app.include_router(evaluate.router)
 
 logger.info("Application configured (cookie_secure=%s)", config.cookie_secure())

@@ -78,6 +78,7 @@ async def client():
     from main import app
 
     transport = httpx.ASGITransport(app=app)
+    # base_url is a dummy in-process host — httpx never connects to it; it only resolves relative paths and sets the Host header.
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as c:
         yield c
 
@@ -92,3 +93,30 @@ async def invited_client():
         # The query token sets the invite cookie (stored in the jar for later requests).
         await c.get("/", params={"invite": "test-invite-token"})
         yield c
+
+
+@pytest.fixture
+async def logged_in(tmp_db):
+    """An invited client carrying a valid session_id cookie (session: en -> fr),
+    plus the new session's id. Tests insert letters/ai_responses into tmp_db."""
+    from db import connect
+    from main import app
+
+    token = "test-session-token"
+    conn = connect(tmp_db)
+    try:
+        cur = conn.execute(
+            "INSERT INTO sessions (session_token, first_name, source_langs_csv, target_langs_csv)"
+            " VALUES (?, ?, ?, ?)",
+            (token, "Mira", "en", "fr"),
+        )
+        session_id = cur.lastrowid
+        conn.commit()
+    finally:
+        conn.close()
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as c:
+        await c.get("/", params={"invite": "test-invite-token"})
+        c.cookies.set("session_id", token)
+        yield c, session_id

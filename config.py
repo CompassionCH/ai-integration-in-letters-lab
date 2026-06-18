@@ -47,6 +47,11 @@ def db_path() -> str:
     return os.environ.get("DB_PATH") or DEFAULT_DB_PATH
 
 
+def letters_dir() -> str:
+    """Base directory holding the letter PDFs (real/ and synthetic/ subdirs)."""
+    return os.environ.get("LETTERS_DIR") or "letters"
+
+
 def log_level() -> str:
     """Logging level name; defaults to INFO."""
     return os.environ.get("LOG_LEVEL", "INFO").upper()

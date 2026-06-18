@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Evaluate — Open Letter Lab{% endblock %}
+{% block body %}
+{# Minimal context-complete stub — replaced by the real evaluation layout later. #}
+<main class="mx-auto max-w-3xl px-6 py-8">
+  {% if show_thanks %}
+  <p class="rounded bg-green-100 px-3 py-2 text-green-800">Thank you — your evaluation was saved.</p>
+  {% endif %}
+  <p class="text-sm text-slate-500">{{ n_done }} / {{ n_total }}</p>
+
+  <section class="mt-4">
+    <h2 class="font-semibold text-compassion">Letter {{ display_ref }}</h2>
+    <ul class="mt-2 text-sm text-slate-600">
+      <li>Child: {{ child_preferred }} ({{ child_official }}) · {{ child_sex }} · {{ child_age }} · {{ country }}</li>
+      <li>Sponsor: {{ sponsor_first }} ({{ sponsor_other_first_names_csv }}) · {{ sponsor_sex }} · {{ sponsor_age }}</li>
+      <li>Queue: {{ source_lang }} → {{ target_lang }}</li>
+    </ul>
+    <p class="mt-2"><a class="text-compassion underline" href="{{ pdf_url }}">Open letter PDF</a></p>
+  </section>
+
+  {% if show_ab_card %}
+  <section class="mt-4 grid grid-cols-2 gap-4">
+    <div><h3 class="font-medium">A</h3><pre class="whitespace-pre-wrap text-sm">{{ translation_a }}</pre></div>
+    <div><h3 class="font-medium">B</h3><pre class="whitespace-pre-wrap text-sm">{{ translation_b }}</pre></div>
+  </section>
+  {% endif %}
+
+  <section class="mt-4 text-sm text-slate-600">
+    <p>Alert: {{ alert_category }}{% if alert_reason %} — {{ alert_reason }}{% endif %}</p>
+    <p class="text-xs text-slate-400">prompt {{ prompt_version }} · {{ model }} · ai_response_id {{ ai_response_id }}</p>
+  </section>
+</main>
+{% endblock %}
