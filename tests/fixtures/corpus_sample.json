@@ -1,0 +1,63 @@
+{
+  "version": 2,
+  "letters": [
+    {
+      "id": "R-001",
+      "type": "real",
+      "pdf_path": "real/R-001.pdf",
+      "direction": "child_to_sponsor",
+      "translation_queue": { "source": "en", "target": "fr" },
+      "country": "Testland",
+      "child": { "official_first_name": "Mira", "preferred_first_name": "Mira", "sex": "F", "age": 9 },
+      "sponsor": { "first_name": "Tom", "other_sponsored_first_names": [], "sex": "M", "age": 40 },
+      "page_level": {
+        "original_text": "Dear Tom, thank you for your letter.",
+        "english_text": "Dear Tom, thank you for your letter.",
+        "translated_text": "Cher Tom, merci pour ta lettre."
+      },
+      "paragraphs": [
+        { "page_index": 0, "sequence": 1, "source_text": "Dear Tom,", "human_translation": "Cher Tom,", "comments": null }
+      ],
+      "human_translation": "Cher Tom, merci pour ta lettre.",
+      "human_translation_origin_field": "translated_text",
+      "ground_truth": null,
+      "notes": "Fictional sample — invented names and text."
+    },
+    {
+      "id": "S-001",
+      "type": "synthetic",
+      "pdf_path": "synthetic/S-001.pdf",
+      "direction": "sponsor_to_child",
+      "translation_queue": { "source": "fr", "target": "en" },
+      "country": "Testland",
+      "child": { "official_first_name": "Aria", "preferred_first_name": "Aria", "sex": "F", "age": 8 },
+      "sponsor": { "first_name": "Marc", "other_sponsored_first_names": [], "sex": "M", "age": 47 },
+      "page_level": { "original_text": "Chere Aria.", "english_text": null, "translated_text": null },
+      "paragraphs": null,
+      "human_translation": null,
+      "human_translation_origin_field": null,
+      "ground_truth": { "expected_category": "child_protection", "rationale": "Fictional injected issue.", "source_letter_id": "R-001" },
+      "notes": "Fictional synthetic sample."
+    },
+    {
+      "id": "I-001",
+      "type": "real",
+      "pdf_path": "real/I-001.pdf",
+      "direction": "child_to_sponsor",
+      "translation_queue": { "source": "en", "target": "de" },
+      "country": "Testland",
+      "child": { "official_first_name": "Noa", "preferred_first_name": "Noa", "sex": "M", "age": 11 },
+      "sponsor": { "first_name": "Lena", "other_sponsored_first_names": [], "sex": "F", "age": 35 },
+      "page_level": {
+        "original_text": "Dear Lena, I would like to visit you.",
+        "english_text": "Dear Lena, I would like to visit you.",
+        "translated_text": null
+      },
+      "paragraphs": null,
+      "human_translation": null,
+      "human_translation_origin_field": null,
+      "ground_truth": { "expected_category": "child_protection", "rationale": "Fictional real issue letter.", "source_letter_id": null },
+      "notes": "Fictional real issue letter (I- prefix, type real)."
+    }
+  ]
+}
