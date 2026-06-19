@@ -211,7 +211,8 @@ async def test_active_prompt_version_is_chosen(logged_in, tmp_db):
         conn.close()
     resp = await client.get("/evaluate", follow_redirects=False)
     assert resp.status_code == 200
-    assert "v2" in resp.text
+    # The chosen translation proves the active version was selected; the volunteer
+    # UI no longer surfaces the internal prompt_version string.
     assert "NEW AI" in resp.text and "OLD AI" not in resp.text  # active version chosen
 
 

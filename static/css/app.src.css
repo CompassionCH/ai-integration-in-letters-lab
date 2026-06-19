@@ -20,11 +20,14 @@
 @font-face { font-family: "Inter"; font-style: normal; font-weight: 600; font-display: swap; src: url("/static/fonts/inter-600.woff2") format("woff2"); }
 
 /* Flash banner (the post-submit thank-you): stays for a moment, then fades out.
-   Opacity-only so the background fades with it — no leftover coloured strip. No JS. */
+   Opacity fades the colour; max-height/padding collapse to 0 in sync so it also
+   leaves no residual height (which would push the full-viewport evaluation layout
+   down). No JS. */
 @keyframes flash-fade {
-  0%, 65% { opacity: 1; }
-  100% { opacity: 0; }
+  0%, 65% { opacity: 1; max-height: 4rem; }
+  100% { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; }
 }
 .flash-banner {
   animation: flash-fade 6s ease-out forwards;
+  overflow: hidden;
 }

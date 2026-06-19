@@ -44,4 +44,20 @@ document.addEventListener("alpine:init", () => {
       this.check();
     },
   }));
+
+  /**
+   * Evaluation-page form. Tracks the missed-issue yes/no answer so the category +
+   * reason fields reveal (x-show) and become required (x-bind:required) only when
+   * "Yes" is chosen. Server-side validation stays authoritative either way; with
+   * JS off the fields simply stay visible and the server enforces them.
+   */
+  window.Alpine.data("evalForm", () => ({
+    /** @type {string} the selected missed_yes_no value ('' until answered) */
+    missed: "",
+
+    /** Whether "Yes" is selected — drives the reveal + the fields' required state. */
+    get missedYes() {
+      return this.missed === "yes";
+    },
+  }));
 });

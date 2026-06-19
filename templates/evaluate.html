@@ -1,33 +1,132 @@
 {% extends "base.html" %}
 {% block title %}Evaluate — Compassion Letter Lab{% endblock %}
 {% block body %}
-{# Minimal context-complete stub — replaced by the real evaluation layout later. #}
-<main class="mx-auto max-w-3xl px-6 py-8">
-  {% if show_thanks %}
-  <p class="rounded bg-green-100 px-3 py-2 text-green-800">Thank you — your evaluation was saved.</p>
-  {% endif %}
-  <p class="text-sm text-slate-500">{{ n_done }} / {{ n_total }}</p>
+{# Two-pane layout (desktop-only). Fills the viewport below the sticky top bar;
+   the PDF and the evaluation column scroll independently. #}
+<div class="flex h-[calc(100vh_-_3.5rem)]">
 
-  <section class="mt-4">
-    <h2 class="font-semibold text-compassion">Letter {{ display_ref }}</h2>
-    <ul class="mt-2 text-sm text-slate-600">
-      <li>Child: {{ child_preferred }} ({{ child_official }}) · {{ child_sex }} · {{ child_age }} · {{ country }}</li>
-      <li>Sponsor: {{ sponsor_first }} ({{ sponsor_other_first_names_csv }}) · {{ sponsor_sex }} · {{ sponsor_age }}</li>
-      <li>Queue: {{ source_lang }} → {{ target_lang }}</li>
-    </ul>
-    <p class="mt-2"><a class="text-compassion underline" href="{{ pdf_url }}">Open letter PDF</a></p>
-  </section>
+  {# LEFT — source PDF (~40 %, full height, own scrollbar). #}
+  <div class="flex w-2/5 shrink-0 flex-col border-r border-slate-200 bg-slate-200">
+    <iframe src="{{ pdf_url }}" title="Source letter" class="h-full w-full"></iframe>
+    <p class="shrink-0 border-t border-slate-200 bg-white px-3 py-1.5 text-center text-xs text-slate-500">
+      Best viewed on desktop. Letter not showing?
+      <a href="{{ pdf_url }}" target="_blank" rel="noopener" class="text-compassion hover:underline">Open the PDF in a new tab</a>.
+    </p>
+  </div>
 
-  {% if show_ab_card %}
-  <section class="mt-4 grid grid-cols-2 gap-4">
-    <div><h3 class="font-medium">A</h3><pre class="whitespace-pre-wrap text-sm">{{ translation_a }}</pre></div>
-    <div><h3 class="font-medium">B</h3><pre class="whitespace-pre-wrap text-sm">{{ translation_b }}</pre></div>
-  </section>
-  {% endif %}
+  {# RIGHT — evaluation column: fixed header + scrolling middle + fixed submit bar. #}
+  <form method="post" action="/evaluate/submit" class="flex min-w-0 flex-1 flex-col" x-data="evalForm">
+    <input type="hidden" name="display_ref" value="{{ display_ref }}">
 
-  <section class="mt-4 text-sm text-slate-600">
-    <p>Alert: {{ alert_category }}{% if alert_reason %} — {{ alert_reason }}{% endif %}</p>
-    <p class="text-xs text-slate-400">prompt {{ prompt_version }} · {{ model }} · ai_response_id {{ ai_response_id }}</p>
-  </section>
-</main>
+    {# Metadata header — three cards, stays at the top of the right pane. #}
+    <div class="grid shrink-0 grid-cols-3 gap-2 border-b border-slate-200 bg-white px-4 py-3 text-xs">
+      <div class="rounded-md border border-slate-200 p-2">
+        <p class="font-semibold uppercase tracking-wide text-slate-400">Child</p>
+        <p class="mt-1 font-medium text-slate-800">{{ child_preferred }}{% if child_official and child_official != child_preferred %} <span class="font-normal text-slate-500">(official: {{ child_official }})</span>{% endif %}</p>
+        <p class="text-slate-500">{{ child_sex }} · {{ child_age }} · {{ country }}</p>
+      </div>
+      <div class="rounded-md border border-slate-200 p-2">
+        <p class="font-semibold uppercase tracking-wide text-slate-400">Sponsor</p>
+        <p class="mt-1 font-medium text-slate-800">{{ sponsor_first }}</p>
+        {% if sponsor_other_first_names_csv %}<p class="text-slate-500">also: {{ sponsor_other_first_names_csv }}</p>{% endif %}
+        <p class="text-slate-500">{{ sponsor_sex }} · {{ sponsor_age }}</p>
+      </div>
+      <div class="rounded-md border border-slate-200 p-2">
+        <p class="font-semibold uppercase tracking-wide text-slate-400">Letter</p>
+        <p class="mt-1 font-mono text-slate-800">{{ display_ref }}</p>
+        <p class="text-slate-500">{{ source_lang | upper }} &rarr; {{ target_lang | upper }}</p>
+      </div>
+    </div>
+
+    {# Scrolling middle — order: alert -> A/B -> missed. #}
+    <div class="flex-1 space-y-6 overflow-y-auto px-4 py-5">
+
+      {# 1. Alert card (first slot, consistent across real + synthetic). #}
+      <section>
+        {% if alert_category != "no_alert" %}
+        <div class="rounded-lg border border-amber-200 bg-amber-50 p-4">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="rounded-full bg-amber-200 px-2 py-0.5 text-xs font-semibold text-amber-900">&#9888; {{ alert_label }}</span>
+            <span class="text-sm font-medium text-slate-700">Is the AI&rsquo;s alert correct?</span>
+          </div>
+          {% if alert_reason %}<p class="mt-2 text-sm italic text-slate-600">&ldquo;{{ alert_reason }}&rdquo;</p>{% endif %}
+          <div class="mt-3 flex flex-wrap gap-2">
+            {% for value, label in [("Correct", "✓ Correct"), ("Incorrect", "✗ Incorrect"), ("Mixed", "~ Mixed")] %}
+            <label>
+              <input type="radio" name="alert_verdict" value="{{ value }}" required class="peer sr-only">
+              <span class="block cursor-pointer rounded-full border border-slate-300 bg-white px-3 py-1 text-sm text-slate-700 peer-checked:border-compassion peer-checked:bg-compassion peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-compassion">{{ label }}</span>
+            </label>
+            {% endfor %}
+          </div>
+          <textarea name="alert_comment" rows="2" placeholder="Comment (optional)" class="mt-3 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-compassion focus:outline-none focus:ring-1 focus:ring-compassion"></textarea>
+        </div>
+        {% else %}
+        <div class="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-500">
+          No alert raised by the AI on this letter.
+        </div>
+        {% endif %}
+      </section>
+
+      {# 2. A/B preference — only for letters with a human translation (parity rule: identical boxes). #}
+      {% if show_ab_card %}
+      <section>
+        <p class="text-sm font-medium text-slate-700">Which translation reads better?</p>
+        <div class="mt-2 grid grid-cols-2 gap-3">
+          <div>
+            <p class="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">A</p>
+            <div class="max-h-[40vh] overflow-y-auto whitespace-pre-wrap rounded-md border border-slate-200 bg-white p-3 text-sm text-slate-800">{{ translation_a }}</div>
+          </div>
+          <div>
+            <p class="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">B</p>
+            <div class="max-h-[40vh] overflow-y-auto whitespace-pre-wrap rounded-md border border-slate-200 bg-white p-3 text-sm text-slate-800">{{ translation_b }}</div>
+          </div>
+        </div>
+        <div class="mt-3 flex flex-wrap gap-2">
+          {% for value, label in [("A", "A preferred"), ("B", "B preferred"), ("Equivalent", "Equivalent")] %}
+          <label>
+            <input type="radio" name="preference" value="{{ value }}" required class="peer sr-only">
+            <span class="block cursor-pointer rounded-full border border-slate-300 bg-white px-3 py-1 text-sm text-slate-700 peer-checked:border-compassion peer-checked:bg-compassion peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-compassion">{{ label }}</span>
+          </label>
+          {% endfor %}
+        </div>
+        <textarea name="preference_comment" rows="2" placeholder="Comment (optional)" class="mt-3 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-compassion focus:outline-none focus:ring-1 focus:ring-compassion"></textarea>
+      </section>
+      {% endif %}
+
+      {# 3. Missed-issue — required yes/no; the details reveal on "Yes" (Alpine x-show). #}
+      <section>
+        <p class="text-sm font-medium text-slate-700">Did the AI miss anything?</p>
+        <div class="mt-2 flex gap-2">
+          {% for value, label in [("yes", "Yes"), ("no", "No")] %}
+          <label>
+            <input type="radio" name="missed_yes_no" value="{{ value }}" x-model="missed" required class="peer sr-only">
+            <span class="block cursor-pointer rounded-full border border-slate-300 bg-white px-4 py-1 text-sm text-slate-700 peer-checked:border-compassion peer-checked:bg-compassion peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-compassion">{{ label }}</span>
+          </label>
+          {% endfor %}
+        </div>
+        {# Visible by default so a JS-off browser still sees the fields; Alpine hides
+           it until "Yes" and toggles `required` to match (server stays authoritative). #}
+        <div x-show="missedYes" class="mt-3 space-y-3">
+          <select name="missed_category" x-bind:required="missedYes" class="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-compassion focus:outline-none focus:ring-1 focus:ring-compassion">
+            <option value="" disabled selected>Choose a category&hellip;</option>
+            {% for c in missed_categories %}
+            <option value="{{ c.id }}">{{ c.label_en }}</option>
+            {% endfor %}
+          </select>
+          <textarea name="missed_reason" x-bind:required="missedYes" rows="2" placeholder="What did the AI miss?" class="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-compassion focus:outline-none focus:ring-1 focus:ring-compassion"></textarea>
+        </div>
+      </section>
+
+    </div>
+
+    {# Submit bar — stays at the bottom of the right pane. #}
+    <div class="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 bg-white px-4 py-3">
+      <p class="text-xs text-slate-400">All questions on this letter are required.</p>
+      <button type="submit" class="inline-flex items-center justify-center rounded-lg bg-compassion px-6 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-compassion/90">
+        Submit evaluation
+      </button>
+    </div>
+
+  </form>
+</div>
 {% endblock %}

@@ -23,6 +23,21 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# Rotating thank-you banner shown after each saved evaluation, indexed by votes
+# done so it varies without randomness (deterministic + refresh-stable). Warm and
+# non-culpabilizing, affirming the value of the volunteer's judgment.
+THANKS_MESSAGES = [
+    "Thank you! Your judgment just made one more letter safer for a child.",
+    "Saved! Every letter you check helps a family's words arrive clearly.",
+    "Got it! Your call helps us learn where the AI can be trusted.",
+    "One more done! Thank you for lending your expertise.",
+    "Saved! Your read keeps these letters faithful to their senders.",
+    "Thank you! Careful work like yours is a true blessing.",
+    "Noted! Each answer sharpens the picture of what the AI gets right.",
+    "Thank you! Your work is making a difference in children's life.",
+    "Done! Your attention to detail makes this evaluation meaningful.",
+]
+
 
 def _session_langs(session):
     source = {s for s in (session["source_langs_csv"] or "").split(",") if s}
@@ -211,7 +226,14 @@ async def evaluate(request: Request):
         for c in candidates
         if selection.matches_session_langs(c, source_langs, target_langs)
     }
+    n_done = len(voted_ids & matching_ids)
+    alert_category = ai["alert_category"] or "no_alert"
+    saved = request.query_params.get("saved") == "1"
 
+    # `a_is_ai` is deliberately NOT in the context: the page must never reveal which
+    # side is the AI (parity). Internal ids (ai_response_id / prompt_version / model)
+    # are omitted too — the volunteer UI doesn't show them and the submit recomputes
+    # the response server-side from `display_ref`.
     context = {
         "display_ref": letter["display_ref"],
         "pdf_url": f"/letters/{letter['display_ref']}.pdf",
@@ -229,15 +251,14 @@ async def evaluate(request: Request):
         "show_ab_card": show_ab,
         "translation_a": translation_a,
         "translation_b": translation_b,
-        "a_is_ai": a_is_ai,
-        "alert_category": ai["alert_category"] or "no_alert",
+        "alert_category": alert_category,
         "alert_reason": ai["alert_reason"],
-        "ai_response_id": ai["id"],
-        "prompt_version": ai["prompt_version"],
-        "model": ai["model"],
-        "n_done": len(voted_ids & matching_ids),
+        "alert_label": categories.label_for(alert_category),
+        "missed_categories": categories.selectable_for_missed(),
+        "n_done": n_done,
         "n_total": len(matching_ids),
-        "show_thanks": request.query_params.get("saved") == "1",
+        # Rotating thank-you for base.html's flash slot, only right after a save.
+        "flash": THANKS_MESSAGES[n_done % len(THANKS_MESSAGES)] if saved else None,
     }
     response = templates.TemplateResponse(request=request, name="evaluate.html", context=context)
     set_session_cookie(response, token)  # sliding refresh
