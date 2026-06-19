@@ -117,3 +117,82 @@ async def session_signout():
     response = RedirectResponse(url="/", status_code=303)
     clear_session_cookie(response)
     return response
+
+
+def _session_langs_lists(session):
+    """The session's current source/target langs as lists, for the edit form."""
+    source = [s for s in (session["source_langs_csv"] or "").split(",") if s]
+    target = [t for t in (session["target_langs_csv"] or "").split(",") if t]
+    return source, target
+
+
+@router.get("/session/languages")
+async def languages_form(request: Request):
+    """Render the language-edit form, pre-filled with the session's current
+    selection (the top-bar "My languages" link points here)."""
+    token = request.cookies.get(SESSION_COOKIE)
+    session = resolve_session(request)
+    if session is None:
+        response = RedirectResponse(url="/", status_code=303)
+        if token:  # stale cookie with no matching row -> clear it
+            clear_session_cookie(response)
+        return response
+    source_langs, target_langs = _session_langs_lists(session)
+    response = templates.TemplateResponse(
+        request=request,
+        name="languages.html",
+        context={"source_langs": source_langs, "target_langs": target_langs},
+    )
+    set_session_cookie(response, session["session_token"])  # sliding refresh
+    return response
+
+
+@router.post("/session/languages")
+async def languages_update(
+    request: Request,
+    source_langs: list[str] = Form(default=[]),
+    target_langs: list[str] = Form(default=[]),
+):
+    """Update the session's declared languages mid-session. No progress is lost —
+    only the next-letter selection is affected by the new prefs."""
+    token = request.cookies.get(SESSION_COOKIE)
+    session = resolve_session(request)
+    if session is None:
+        response = RedirectResponse(url="/", status_code=303)
+        if token:
+            clear_session_cookie(response)
+        return response
+
+    if not _has_supported_lang(source_langs) or not _has_supported_lang(target_langs):
+        # Re-render the form inline with the error and the attempted selection.
+        response = templates.TemplateResponse(
+            request=request,
+            name="languages.html",
+            context={
+                "error": (
+                    "Please choose at least one source and one target language "
+                    "from French, German, Italian or English."
+                ),
+                "source_langs": source_langs,
+                "target_langs": target_langs,
+            },
+            status_code=422,
+        )
+        set_session_cookie(response, session["session_token"])
+        return response
+
+    conn = connect()
+    try:
+        conn.execute(
+            "UPDATE sessions SET source_langs_csv = ?, target_langs_csv = ? WHERE id = ?",
+            (",".join(source_langs), ",".join(target_langs), session["id"]),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    # Log languages only — never the participant's name.
+    logger.info("Session languages updated (langs %s -> %s)", source_langs, target_langs)
+    response = RedirectResponse(url="/evaluate", status_code=303)
+    set_session_cookie(response, session["session_token"])  # sliding refresh
+    return response
