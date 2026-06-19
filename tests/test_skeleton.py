@@ -40,7 +40,7 @@ async def test_invite_query_sets_cookie_and_redirects(client):
     # The client now holds the cookie; the next request reaches the real landing.
     landing = await client.get("/")
     assert landing.status_code == 200
-    assert "Open Letter Lab" in landing.text
+    assert "Compassion Letter Lab" in landing.text
     assert "translation platform" not in landing.text.lower()
 
 
