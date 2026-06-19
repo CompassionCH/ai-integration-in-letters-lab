@@ -27,11 +27,14 @@ def get_value(row, key):
         return None
 
 
-def passes_filters(row, filters) -> bool:
-    """True if ``row`` matches every active filter. ``filters`` is a dict over
-    FILTER_KEYS; a value of ``"__all__"`` (or an absent key) means no constraint
-    on that dimension. A filter key the row lacks fails closed (the row drops)."""
-    for key in FILTER_KEYS:
+def passes_filters(row, filters, keys=FILTER_KEYS) -> bool:
+    """True if ``row`` matches every active filter. ``filters`` is a dict; a value
+    of ``"__all__"`` (or an absent key) means no constraint on that dimension.
+    ``keys`` limits which dimensions are honored: a function that supports only a
+    subset (e.g. cost honors ``prompt_version`` only) passes its own subset so
+    unrelated filters in the dict are ignored. A filter key the row lacks fails
+    closed (the row drops)."""
+    for key in keys:
         if key not in filters:
             continue
         wanted = filters[key]
