@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Admin · Compassion Letter Lab{% endblock %}
+
+{# Minimal placeholder dashboard: surfaces only the active prompt version + model.
+   The metric blocks, filters and styling arrive with the dashboard layout work,
+   which replaces this template. #}
+{% block body %}
+<main class="mx-auto max-w-3xl px-4 py-8">
+  <h1 class="text-2xl font-semibold text-slate-800">Admin dashboard</h1>
+
+  <dl class="mt-4 space-y-1 text-sm text-slate-600">
+    <div class="flex gap-2">
+      <dt class="font-medium">Active prompt version:</dt>
+      <dd>{{ active_prompt_version | default("—", true) }}</dd>
+    </div>
+    <div class="flex gap-2">
+      <dt class="font-medium">Model:</dt>
+      <dd>{{ model | default("—", true) }}</dd>
+    </div>
+  </dl>
+
+  <p class="mt-6 text-sm text-slate-500">
+    Metrics will appear here as the analysis layer is connected.
+  </p>
+</main>
+{% endblock %}

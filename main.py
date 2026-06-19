@@ -29,11 +29,15 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
 import security
-from routes import evaluate, health, pages, session
+from routes import admin, evaluate, health, pages, session
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Fail fast on a missing admin secret: a misconfigured deploy should crash at
+    # startup rather than serve 500s on the first /admin request. (Lifespan does
+    # not run under the test ASGI transport, so the suite is unaffected.)
+    config.admin_token()
     # Startup: warn about letters a safety filter excludes from serving (best-effort).
     evaluate.warn_safety_filtered()
     yield
@@ -53,5 +57,6 @@ app.include_router(health.router)
 app.include_router(pages.router)
 app.include_router(session.router)
 app.include_router(evaluate.router)
+app.include_router(admin.router)
 
 logger.info("Application configured (cookie_secure=%s)", config.cookie_secure())

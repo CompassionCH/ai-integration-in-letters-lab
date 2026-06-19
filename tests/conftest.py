@@ -3,10 +3,12 @@ import os
 
 import pytest
 
-# The perimeter gate needs an invite token and the ASGI client speaks plain
-# HTTP, so make Secure cookies round-trip. Set before the app is imported;
-# config reads the environment lazily and load_dotenv() will not override these.
+# The perimeter gate needs an invite token, the admin endpoint needs its own
+# secret, and the ASGI client speaks plain HTTP so Secure cookies must round-trip.
+# Set before the app is imported; config reads the environment lazily and
+# load_dotenv() will not override these.
 os.environ.setdefault("ACCESS_TOKEN", "test-invite-token")
+os.environ.setdefault("ADMIN_TOKEN", "test-admin-token")
 os.environ.setdefault("COOKIE_SECURE", "false")
 
 import httpx
