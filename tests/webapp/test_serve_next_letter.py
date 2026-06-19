@@ -403,3 +403,22 @@ async def test_voted_letter_pdf_serves_even_after_filtered(logged_in, tmp_db, tm
     monkeypatch.setenv("LETTERS_DIR", str(letters_dir))
     # served set includes voted letters unconditionally (review-past), so the PDF still serves
     assert (await client.get("/letters/aaa11111.pdf")).status_code == 200
+
+
+async def test_done_page_shows_evaluated_count(logged_in, tmp_db):
+    client, session_id = logged_in
+    for ref in ("aaa00001", "bbb00002"):
+        lid = _insert_letter(tmp_db, ref)
+        conn = connect(tmp_db)
+        try:
+            conn.execute(
+                "INSERT INTO votes (session_id, letter_id, ai_response_id, preference, a_is_ai)"
+                " SELECT ?, ?, id, 'A', 1 FROM ai_responses WHERE letter_id = ?",
+                (session_id, lid, lid),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    resp = await client.get("/evaluate/done")
+    assert resp.status_code == 200
+    assert "2 letters" in resp.text  # the evaluated count, pluralised

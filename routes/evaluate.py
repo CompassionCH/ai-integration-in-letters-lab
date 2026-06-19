@@ -363,7 +363,16 @@ async def evaluate_done(request: Request):
         if token:
             clear_session_cookie(response)
         return response
-    response = templates.TemplateResponse(request=request, name="evaluate_done.html", context={})
+    conn = connect()
+    try:
+        evaluated_count = len(_voted_ids(conn, session["id"]))
+    finally:
+        conn.close()
+    response = templates.TemplateResponse(
+        request=request,
+        name="evaluate_done.html",
+        context={"evaluated_count": evaluated_count},
+    )
     set_session_cookie(response, token)  # sliding refresh
     return response
 
