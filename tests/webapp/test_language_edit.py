@@ -5,21 +5,21 @@ from db import connect
 
 
 async def test_get_languages_form_prefilled(logged_in, tmp_db):
-    client, _ = logged_in  # session: en -> fr
+    client, _ = logged_in  # session stores en + fr
     resp = await client.get("/session/languages")
     assert resp.status_code == 200
     assert 'action="/session/languages"' in resp.text
-    # Current selection is pre-checked: en (source) + fr (target); de (source) is not.
-    assert re.search(r'name="source_langs" value="en"\s+checked', resp.text)
-    assert re.search(r'name="target_langs" value="fr"\s+checked', resp.text)
-    assert not re.search(r'name="source_langs" value="de"\s+checked', resp.text)
+    # Current selection is pre-checked: en + fr; de is not.
+    assert re.search(r'name="spoken_langs" value="en"\s+checked', resp.text)
+    assert re.search(r'name="spoken_langs" value="fr"\s+checked', resp.text)
+    assert not re.search(r'name="spoken_langs" value="de"\s+checked', resp.text)
 
 
 async def test_post_updates_languages(logged_in, tmp_db):
     client, session_id = logged_in
     resp = await client.post(
         "/session/languages",
-        data={"source_langs": ["en", "fr"], "target_langs": ["de"]},
+        data={"spoken_langs": ["en", "fr", "de"]},
         follow_redirects=False,
     )
     assert resp.status_code == 303
@@ -32,32 +32,35 @@ async def test_post_updates_languages(logged_in, tmp_db):
         ).fetchone()
     finally:
         conn.close()
-    assert row["source_langs_csv"] == "en,fr"
-    assert row["target_langs_csv"] == "de"
+    # The spoken set lands in both columns.
+    assert row["source_langs_csv"] == "en,fr,de"
+    assert row["target_langs_csv"] == "en,fr,de"
 
 
-async def test_post_rejects_missing_language(logged_in, tmp_db):
+async def test_post_rejects_single_language(logged_in, tmp_db):
     client, session_id = logged_in
     resp = await client.post(
         "/session/languages",
-        data={"source_langs": [], "target_langs": ["fr"]},  # no source language
+        data={"spoken_langs": ["fr"]},  # only one language
         follow_redirects=False,
     )
     assert resp.status_code == 422
     conn = connect(tmp_db)
     try:
         row = conn.execute(
-            "SELECT source_langs_csv FROM sessions WHERE id = ?", (session_id,)
+            "SELECT source_langs_csv, target_langs_csv FROM sessions WHERE id = ?",
+            (session_id,),
         ).fetchone()
     finally:
         conn.close()
     assert row["source_langs_csv"] == "en"  # unchanged
+    assert row["target_langs_csv"] == "fr"  # unchanged
 
 
 async def test_languages_without_session_redirects_home(invited_client):
     post = await invited_client.post(
         "/session/languages",
-        data={"source_langs": ["en"], "target_langs": ["fr"]},
+        data={"spoken_langs": ["en", "fr"]},
         follow_redirects=False,
     )
     assert post.status_code == 303

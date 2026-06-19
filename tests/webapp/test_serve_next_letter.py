@@ -51,12 +51,15 @@ async def test_serves_next_unrated_letter(logged_in, tmp_db):
     assert "aaa11111" in resp.text
 
 
-async def test_language_filtering_excludes_nonmatching(logged_in, tmp_db):
-    client, _ = logged_in  # session is en -> fr
-    _insert_letter(tmp_db, "de000001", source="de", target="fr")  # source de not handled
+async def test_no_language_match_shows_empty_state(logged_in, tmp_db):
+    client, _ = logged_in  # session speaks en + fr
+    # The only letter is de->it: the volunteer handles neither side, so NO corpus
+    # letter matches their languages -> the distinct empty state (NOT the done page,
+    # which is reserved for "you evaluated everything you could").
+    _insert_letter(tmp_db, "de000001", source="de", target="it")
     resp = await client.get("/evaluate", follow_redirects=False)
-    assert resp.status_code == 303
-    assert resp.headers["location"] == "/evaluate/done"
+    assert resp.status_code == 200
+    assert "No letters match your languages" in resp.text
 
 
 async def test_end_of_corpus_redirects_done(logged_in, tmp_db):

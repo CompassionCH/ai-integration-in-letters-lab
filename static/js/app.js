@@ -15,7 +15,7 @@
 document.addEventListener("alpine:init", () => {
   /**
    * Start-page form gate. Disables the submit button until the participant has
-   * entered both names and ticked at least one source and one target language.
+   * entered both names and ticked at least TWO languages they speak.
    *
    * Bound in templates/start.html with `x-data="startForm"` on the <form>, so
    * `this.$el` is the form element. It only READS the form state — the inputs
@@ -32,11 +32,31 @@ document.addEventListener("alpine:init", () => {
       const named =
         form.first_name.value.trim() !== "" &&
         form.last_name.value.trim() !== "";
-      const hasSource =
-        form.querySelectorAll('input[name="source_langs"]:checked').length > 0;
-      const hasTarget =
-        form.querySelectorAll('input[name="target_langs"]:checked').length > 0;
-      this.valid = named && hasSource && hasTarget;
+      const spoken =
+        form.querySelectorAll('input[name="spoken_langs"]:checked').length;
+      this.valid = named && spoken >= 2;
+    },
+
+    /** Alpine lifecycle hook — seed {@link valid} from the initial markup. */
+    init() {
+      this.check();
+    },
+  }));
+
+  /**
+   * "My languages" edit-form gate. Same minimum-two rule as the start page, but
+   * with no name fields. Bound in templates/languages.html. Server-side
+   * validation stays authoritative; with JS off the Save button is always enabled.
+   */
+  window.Alpine.data("languagesForm", () => ({
+    /** @type {boolean} whether at least two languages are ticked */
+    valid: false,
+
+    /** Recompute {@link valid} from the current selection. */
+    check() {
+      const form = /** @type {HTMLFormElement} */ (this.$el);
+      this.valid =
+        form.querySelectorAll('input[name="spoken_langs"]:checked').length >= 2;
     },
 
     /** Alpine lifecycle hook — seed {@link valid} from the initial markup. */

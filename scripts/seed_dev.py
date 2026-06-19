@@ -58,14 +58,14 @@ def _placeholder_pdf(title: str) -> bytes:
     return bytes(out)
 
 
-def _letter(conn, display_ref, *, ltype, human, ground_truth, pdf_title):
+def _letter(conn, display_ref, *, ltype, human, ground_truth, pdf_title, src="en", tgt="fr"):
     pdf_path = f"dev/{display_ref}.pdf"
     cur = conn.execute(
         "INSERT INTO letters (display_ref, type, pdf_path, direction, source_lang,"
         " target_lang, country, child_official, child_preferred, child_sex, child_age,"
         " sponsor_first, sponsor_sex, sponsor_age, human_translation_text,"
         " ground_truth_category) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        (display_ref, ltype, pdf_path, "child_to_sponsor", "en", "fr", "Kenya",
+        (display_ref, ltype, pdf_path, "child_to_sponsor", src, tgt, "Kenya",
          "Amara", "Amara", "F", 10, "Robin", "F", 41, human, ground_truth),
     )
     pdf_file = Path(config.letters_dir()) / pdf_path
@@ -85,11 +85,13 @@ def _response(conn, letter_id, version, *, alert):
     return cur.lastrowid
 
 
-def _session(conn, token, first, last, source, target):
+def _session(conn, token, first, last, spoken_csv):
+    """Spoken-languages model: the same set lives in both columns (a letter is
+    offered when the volunteer speaks both its source and target language)."""
     cur = conn.execute(
         "INSERT INTO sessions (session_token, first_name, last_name, source_langs_csv,"
         " target_langs_csv) VALUES (?,?,?,?,?)",
-        (token, first, last, source, target),
+        (token, first, last, spoken_csv, spoken_csv),
     )
     return cur.lastrowid
 
@@ -121,7 +123,8 @@ def seed():
         for table in _DATA_TABLES:
             conn.execute(f"DELETE FROM {table}")
 
-        # Two real letters (A/B card), one issue letter, one false-positive trap.
+        # Real en->fr letters (A/B card), an issue + a false-positive trap, and a
+        # real fr->de letter so multilingual matching is demonstrable.
         l1 = _letter(conn, "rea0a001", ltype="real",
                      human="Dear sponsor, thank you for your kind letter...",
                      ground_truth=None, pdf_title="Sample real letter 1 - local dev")
@@ -133,6 +136,10 @@ def seed():
                      pdf_title="Sample issue letter - local dev")
         l4 = _letter(conn, "trp0d004", ltype="synthetic", human=None,
                      ground_truth="no_alert", pdf_title="Sample trap letter - local dev")
+        l5 = _letter(conn, "rea0e005", ltype="real",
+                     human="Bonjour, merci pour ta gentille lettre...",
+                     ground_truth=None, pdf_title="Sample real letter FR-DE - local dev",
+                     src="fr", tgt="de")
 
         # v1 covers all four; v2 only the real pair -> a partial-coverage badge.
         r1 = _response(conn, l1, "v1", alert=None)
@@ -141,17 +148,19 @@ def seed():
         _response(conn, l2, "v2", alert="wrong_child_name")
         r3 = _response(conn, l3, "v1", alert="child_protection")  # ground truth -> TP
         _response(conn, l4, "v1", alert=None)                     # FP-trap -> trap passed
+        r5 = _response(conn, l5, "v1", alert=None)                # fr->de real pair
         conn.execute("INSERT INTO app_settings (key, value) VALUES ('active_prompt_version', 'v1')")
 
         # A couple of sample votes so the dashboard isn't empty; your own session
         # (created via /start) is separate, so all four letters stay unvoted for you.
         # Placeholder surnames — all sample data here is fictional.
-        s1 = _session(conn, "dev-mara", "Mara", "Example", "en", "fr")
-        s2 = _session(conn, "dev-luc", "Luc", "Sample", "en", "fr,de")
+        s1 = _session(conn, "dev-mara", "Mara", "Example", "en,fr")
+        s2 = _session(conn, "dev-luc", "Luc", "Sample", "en,fr,de")
         _vote(conn, s1, l1, r1, preference="A", a_is_ai=1)
         _vote(conn, s1, l2, r2, preference="B", a_is_ai=0, verdict="Correct")
         _vote(conn, s2, l3, r3, preference=None, a_is_ai=None, verdict="Mixed",
               missed="wrong_sponsor_name")
+        _vote(conn, s2, l5, r5, preference="Equivalent", a_is_ai=1)  # fr->de, Luc speaks de
 
         conn.commit()
     finally:

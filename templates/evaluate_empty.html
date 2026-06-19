@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}No letters yet — Compassion Letter Lab{% endblock %}
+{% block body %}
+<main class="mx-auto flex min-h-[calc(100vh_-_3.5rem)] max-w-lg flex-col items-center justify-center px-6 py-12 text-center">
+  <img src="/static/branding/logo_simple.png" alt="" aria-hidden="true" class="mx-auto h-16 w-16">
+
+  <h1 class="mt-5 text-3xl font-semibold text-compassion">No letters match your languages yet</h1>
+
+  <p class="mt-4 text-lg leading-relaxed text-slate-600">
+    We don&rsquo;t have any letters to evaluate for the languages you selected right now.
+    Adding another language you speak may bring up new letters to review.
+  </p>
+
+  <div class="mt-8">
+    <a href="/session/languages"
+       class="inline-flex items-center justify-center rounded-lg bg-compassion px-6 py-3 text-base font-medium text-white shadow-sm transition hover:bg-compassion/90">
+      Update my languages
+    </a>
+  </div>
+</main>
+{% endblock %}

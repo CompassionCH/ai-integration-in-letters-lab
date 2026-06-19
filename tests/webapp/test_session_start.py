@@ -4,8 +4,7 @@ from db import connect
 VALID_FORM = {
     "first_name": "Mira",
     "last_name": "Tester",
-    "source_langs": ["en"],
-    "target_langs": ["fr"],
+    "spoken_langs": ["en", "fr"],
 }
 
 
@@ -29,18 +28,20 @@ async def test_session_start_happy_path(invited_client, tmp_db):
     finally:
         conn.close()
     assert row["first_name"] == "Mira"
-    assert row["source_langs_csv"] == "en"
-    assert row["target_langs_csv"] == "fr"
+    # The single spoken set is stored in BOTH columns (no schema change).
+    assert row["source_langs_csv"] == "en,fr"
+    assert row["target_langs_csv"] == "en,fr"
 
 
-async def test_session_start_rejects_empty_target_lang(invited_client):
-    form = {"first_name": "Mira", "last_name": "T", "source_langs": ["en"], "target_langs": []}
+async def test_session_start_rejects_single_language(invited_client):
+    form = {"first_name": "Mira", "last_name": "T", "spoken_langs": ["en"]}
     resp = await invited_client.post("/session/start", data=form, follow_redirects=False)
     assert resp.status_code == 422
 
 
-async def test_session_start_rejects_unsupported_lang(invited_client):
-    form = {"first_name": "Mira", "last_name": "T", "source_langs": ["sw"], "target_langs": ["fr"]}
+async def test_session_start_rejects_when_supported_subset_under_two(invited_client):
+    # One supported + one unsupported -> supported subset is just {en} -> still < 2.
+    form = {"first_name": "Mira", "last_name": "T", "spoken_langs": ["en", "sw"]}
     resp = await invited_client.post("/session/start", data=form, follow_redirects=False)
     assert resp.status_code == 422
 

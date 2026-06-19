@@ -20,8 +20,13 @@ SESSION_COOKIE_MAX_AGE = 60 * 60 * 24 * 30  # 30 days
 SUPPORTED_LANGS = {"fr", "de", "it", "en"}
 
 
-def _has_supported_lang(langs: list[str]) -> bool:
-    return any(lang in SUPPORTED_LANGS for lang in langs)
+def _supported_subset(langs: list[str]) -> list[str]:
+    """The submitted languages that are supported, de-duplicated, order preserved."""
+    subset: list[str] = []
+    for lang in langs:
+        if lang in SUPPORTED_LANGS and lang not in subset:
+            subset.append(lang)
+    return subset
 
 
 def set_session_cookie(response, token: str) -> None:
@@ -69,28 +74,30 @@ async def session_start(
     request: Request,
     first_name: str = Form(...),
     last_name: str = Form(...),
-    source_langs: list[str] = Form(default=[]),
-    target_langs: list[str] = Form(default=[]),
+    spoken_langs: list[str] = Form(default=[]),
 ):
-    if not _has_supported_lang(source_langs) or not _has_supported_lang(target_langs):
+    langs = _supported_subset(spoken_langs)
+    if len(langs) < 2:
         # Re-render the form inline with the error and the values already entered,
-        # so the participant can fix the languages without re-typing.
+        # so the participant can fix the selection without re-typing.
         return templates.TemplateResponse(
             request=request,
             name="start.html",
             context={
                 "error": (
-                    "Please choose at least one source and one target language "
-                    "from French, German, Italian or English."
+                    "Please choose at least two languages you speak "
+                    "(from French, German, Italian or English)."
                 ),
                 "first_name": first_name,
                 "last_name": last_name,
-                "source_langs": source_langs,
-                "target_langs": target_langs,
+                "spoken_langs": spoken_langs,
             },
             status_code=422,
         )
 
+    # One "languages you speak" set, stored in both columns so a letter matches
+    # when the volunteer speaks both its source and target language (see selection).
+    langs_csv = ",".join(langs)
     token = str(uuid.uuid4())
     conn = connect()
     try:
@@ -98,14 +105,14 @@ async def session_start(
             "INSERT INTO sessions"
             " (session_token, first_name, last_name, source_langs_csv, target_langs_csv)"
             " VALUES (?, ?, ?, ?, ?)",
-            (token, first_name, last_name, ",".join(source_langs), ",".join(target_langs)),
+            (token, first_name, last_name, langs_csv, langs_csv),
         )
         conn.commit()
     finally:
         conn.close()
 
     # Log languages only — never the participant's name.
-    logger.info("Session started (langs %s -> %s)", source_langs, target_langs)
+    logger.info("Session started (spoken langs %s)", langs)
 
     response = RedirectResponse(url="/evaluate", status_code=303)
     set_session_cookie(response, token)
@@ -119,11 +126,16 @@ async def session_signout():
     return response
 
 
-def _session_langs_lists(session):
-    """The session's current source/target langs as lists, for the edit form."""
-    source = [s for s in (session["source_langs_csv"] or "").split(",") if s]
-    target = [t for t in (session["target_langs_csv"] or "").split(",") if t]
-    return source, target
+def _session_spoken_langs(session) -> list[str]:
+    """The session's declared languages as one list, for the edit form. New
+    sessions store the same set in both columns; older sessions (separate
+    from/into) fold to the union so the form shows a sensible ≥ 2 selection."""
+    spoken: list[str] = []
+    for csv in (session["source_langs_csv"], session["target_langs_csv"]):
+        for lang in (csv or "").split(","):
+            if lang and lang not in spoken:
+                spoken.append(lang)
+    return spoken
 
 
 @router.get("/session/languages")
@@ -137,11 +149,10 @@ async def languages_form(request: Request):
         if token:  # stale cookie with no matching row -> clear it
             clear_session_cookie(response)
         return response
-    source_langs, target_langs = _session_langs_lists(session)
     response = templates.TemplateResponse(
         request=request,
         name="languages.html",
-        context={"source_langs": source_langs, "target_langs": target_langs},
+        context={"spoken_langs": _session_spoken_langs(session)},
     )
     set_session_cookie(response, session["session_token"])  # sliding refresh
     return response
@@ -150,8 +161,7 @@ async def languages_form(request: Request):
 @router.post("/session/languages")
 async def languages_update(
     request: Request,
-    source_langs: list[str] = Form(default=[]),
-    target_langs: list[str] = Form(default=[]),
+    spoken_langs: list[str] = Form(default=[]),
 ):
     """Update the session's declared languages mid-session. No progress is lost —
     only the next-letter selection is affected by the new prefs."""
@@ -163,36 +173,37 @@ async def languages_update(
             clear_session_cookie(response)
         return response
 
-    if not _has_supported_lang(source_langs) or not _has_supported_lang(target_langs):
+    langs = _supported_subset(spoken_langs)
+    if len(langs) < 2:
         # Re-render the form inline with the error and the attempted selection.
         response = templates.TemplateResponse(
             request=request,
             name="languages.html",
             context={
                 "error": (
-                    "Please choose at least one source and one target language "
-                    "from French, German, Italian or English."
+                    "Please choose at least two languages you speak "
+                    "(from French, German, Italian or English)."
                 ),
-                "source_langs": source_langs,
-                "target_langs": target_langs,
+                "spoken_langs": spoken_langs,
             },
             status_code=422,
         )
         set_session_cookie(response, session["session_token"])
         return response
 
+    langs_csv = ",".join(langs)
     conn = connect()
     try:
         conn.execute(
             "UPDATE sessions SET source_langs_csv = ?, target_langs_csv = ? WHERE id = ?",
-            (",".join(source_langs), ",".join(target_langs), session["id"]),
+            (langs_csv, langs_csv, session["id"]),
         )
         conn.commit()
     finally:
         conn.close()
 
     # Log languages only — never the participant's name.
-    logger.info("Session languages updated (langs %s -> %s)", source_langs, target_langs)
+    logger.info("Session languages updated (spoken langs %s)", langs)
     response = RedirectResponse(url="/evaluate", status_code=303)
     set_session_cookie(response, session["session_token"])  # sliding refresh
     return response

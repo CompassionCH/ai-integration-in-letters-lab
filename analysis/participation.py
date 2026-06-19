@@ -45,10 +45,12 @@ def _csv_set(csv) -> set[str]:
 
 def _language_pairs(session) -> set[tuple[str, str]]:
     """Declared (source, target) pairs = Cartesian product of the session's
-    source × target language selections."""
+    source × target language selections, excluding same-language pairs. The
+    spoken-set model stores the same languages in both columns, so without this
+    filter (en, en) etc. would appear — and no letter has source == target."""
     sources = _csv_set(get_value(session, "source_langs_csv"))
     targets = _csv_set(get_value(session, "target_langs_csv"))
-    return {(s, t) for s in sources for t in targets}
+    return {(s, t) for s in sources for t in targets if s != t}
 
 
 def aggregate_participation(sessions, votes, filters=None) -> ParticipationReport:

@@ -195,6 +195,9 @@ async def evaluate(request: Request):
         active = _active_prompt_version(conn)
         candidates = _load_candidates(conn, active)
         voted_ids = _voted_ids(conn, session["id"])
+        all_letter_langs = conn.execute(
+            "SELECT source_lang, target_lang FROM letters"
+        ).fetchall()
     finally:
         conn.close()
 
@@ -202,6 +205,21 @@ async def evaluate(request: Request):
         session["id"], candidates, voted_ids, source_langs, target_langs
     )
     if chosen is None:
+        # Distinguish a language dead-end (no letter in the corpus is in a pair this
+        # volunteer can handle) from genuine completion. Keyed on language ONLY —
+        # ignoring votes and safety — so an all-voted or all-safety-filtered corpus
+        # still lands on the normal done page, while a language mismatch gets the
+        # distinct "no letters for your languages" state.
+        lang_matchable = any(
+            selection.matches_session_langs(row, source_langs, target_langs)
+            for row in all_letter_langs
+        )
+        if not lang_matchable:
+            response = templates.TemplateResponse(
+                request=request, name="evaluate_empty.html", context={}
+            )
+            set_session_cookie(response, token)  # sliding refresh
+            return response
         response = RedirectResponse(url="/evaluate/done", status_code=303)
         set_session_cookie(response, token)  # sliding refresh
         return response

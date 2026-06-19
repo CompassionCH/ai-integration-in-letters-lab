@@ -78,6 +78,21 @@ def test_language_pairs_cartesian_product():
     }
 
 
+def test_same_language_pairs_excluded():
+    # Spoken-set model: both columns hold the same set, so without filtering
+    # (en, en) etc. would appear. Only cross-language pairs are kept.
+    sessions = [_session(1, "A", "Z", source="en,fr,de", target="en,fr,de")]
+    r = aggregate_participation(sessions, [_vote(1, 10)])
+    pairs = set(r.per_translator[0].language_pairs)
+    assert ("en", "en") not in pairs
+    assert ("fr", "fr") not in pairs
+    assert ("de", "de") not in pairs
+    assert pairs == {
+        ("en", "fr"), ("en", "de"), ("fr", "en"),
+        ("fr", "de"), ("de", "en"), ("de", "fr"),
+    }
+
+
 def test_filter_by_dimensions_and_all_sentinel():
     sessions = [_session(1, "A", "Z"), _session(2, "B", "Y")]
     votes = [_vote(1, 10, prompt_version="v1"), _vote(2, 11, prompt_version="v2")]
