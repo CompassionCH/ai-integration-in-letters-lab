@@ -16,13 +16,16 @@ endpoint ships a minimal, context-complete stub so it stands alone.
 """
 from __future__ import annotations
 
+import csv
 import hmac
+import io
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote, unquote
 
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import FileResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, RedirectResponse, Response, StreamingResponse
 
 import config
 from db import connect
@@ -78,6 +81,24 @@ def _set_admin_cookie(response: Response) -> None:
         samesite="lax",
         path="/",
     )
+
+
+def _admin_auth_response(request: Request) -> Response | None:
+    """Shared admin gate for the GET endpoints reachable by direct link
+    (``/admin``, ``/admin/export.csv``). Returns None when a valid ``admin_session``
+    cookie is present (the caller proceeds). Otherwise, on a Bearer-header or
+    ``?token=`` match, returns a 302 that sets the cookie and redirects to the same
+    path *without* the query (the secret leaves the URL/logs); else a 401. The
+    cookie-only settings routes use ``_has_admin_cookie`` directly."""
+    if _has_admin_cookie(request):
+        return None
+    if _token_matches(_bearer_token(request)) or _token_matches(
+        request.query_params.get("token")
+    ):
+        redirect = RedirectResponse(url=request.url.path, status_code=302)
+        _set_admin_cookie(redirect)
+        return redirect
+    return Response("Unauthorized", status_code=401)
 
 
 def resolve_active_prompt_version(conn) -> str | None:
@@ -161,19 +182,10 @@ def _render_dashboard(request: Request) -> Response:
 
 @router.get("/admin")
 async def admin_dashboard(request: Request):
-    # 1) Already authenticated via the cookie -> render straight away.
-    if _has_admin_cookie(request):
-        return _render_dashboard(request)
-    # 2) Bearer header, then 3) ?token query. First match wins; on success set the
-    #    cookie and 302 to the clean path so the secret leaves the URL and the logs.
-    if _token_matches(_bearer_token(request)) or _token_matches(
-        request.query_params.get("token")
-    ):
-        redirect = RedirectResponse(url="/admin", status_code=302)
-        _set_admin_cookie(redirect)
-        return redirect
-    # 4) No valid credential.
-    return Response("Unauthorized", status_code=401)
+    gate = _admin_auth_response(request)
+    if gate is not None:  # redirect-to-set-cookie or 401
+        return gate
+    return _render_dashboard(request)
 
 
 @router.get("/admin/letters/{letter_id}.pdf")
@@ -253,3 +265,117 @@ async def get_active_prompt_version(request: Request):
     finally:
         conn.close()
     return {"active_prompt_version": value}
+
+
+# --- CSV export (one row per vote) --------------------------------------------
+
+CSV_COLUMNS = (
+    "session_id",
+    "translator_first_name",
+    "translator_last_name",
+    "letter_id",
+    "letter_type",
+    "direction",
+    "source_lang",
+    "target_lang",
+    "country",
+    "preference",
+    "preference_comment",
+    "ai_response_id",
+    "a_is_ai",
+    "alert_category",
+    "alert_verdict",
+    "alert_comment",
+    "missed_yes_no",
+    "missed_category",
+    "missed_reason",
+    "prompt_version",
+    "model",
+    "voted_at_iso",
+)
+
+# LEFT JOINs: a vote has an alert_evaluation only when the served response raised
+# an alert. The persist logic writes at most one alert_evaluation and exactly one
+# missed_issues per vote, so no row fans out.
+_EXPORT_QUERY = """
+    SELECT
+        v.session_id          AS session_id,
+        s.first_name          AS translator_first_name,
+        s.last_name           AS translator_last_name,
+        v.letter_id           AS letter_id,
+        l.type                AS letter_type,
+        l.direction           AS direction,
+        l.source_lang         AS source_lang,
+        l.target_lang         AS target_lang,
+        l.country             AS country,
+        v.preference          AS preference,
+        v.preference_comment  AS preference_comment,
+        v.ai_response_id      AS ai_response_id,
+        v.a_is_ai             AS a_is_ai,
+        ai.alert_category     AS alert_category,
+        ae.verdict            AS alert_verdict,
+        ae.comment            AS alert_comment,
+        mi.missed_yes_no      AS missed_yes_no,
+        mi.category           AS missed_category,
+        mi.reason             AS missed_reason,
+        ai.prompt_version     AS prompt_version,
+        ai.model              AS model,
+        v.voted_at            AS voted_at_iso
+    FROM votes v
+    LEFT JOIN sessions s           ON s.id = v.session_id
+    LEFT JOIN letters l            ON l.id = v.letter_id
+    LEFT JOIN ai_responses ai      ON ai.id = v.ai_response_id
+    LEFT JOIN alert_evaluations ae ON ae.vote_id = v.id
+    LEFT JOIN missed_issues mi     ON mi.vote_id = v.id
+    ORDER BY v.id
+"""
+
+
+def _to_iso(value):
+    """SQLite UTC 'YYYY-MM-DD HH:MM:SS' -> canonical ISO-8601 'YYYY-MM-DDTHH:MM:SSZ'."""
+    return f"{value.replace(' ', 'T')}Z" if value else ""
+
+
+def _drain(buffer: io.StringIO) -> str:
+    """Return the buffer's contents and reset it — one CSV chunk per row."""
+    value = buffer.getvalue()
+    buffer.seek(0)
+    buffer.truncate(0)
+    return value
+
+
+@router.get("/admin/export.csv")
+async def export_csv(request: Request):
+    """Flat CSV of every vote (one row each) for offline analysis — also the
+    manual backup of the only irreplaceable data. Same auth chain as /admin."""
+    gate = _admin_auth_response(request)
+    if gate is not None:
+        return gate
+    conn = connect()
+    try:
+        # Materialize to plain lists in column order: the streaming generator runs
+        # after the handler returns (possibly off-thread), so it must not touch the
+        # connection (connect() is check_same_thread=True). PoC-scale data; the CSV
+        # text is still serialized lazily, row by row.
+        records = [
+            [_to_iso(row[c]) if c == "voted_at_iso" else row[c] for c in CSV_COLUMNS]
+            for row in conn.execute(_EXPORT_QUERY)
+        ]
+    finally:
+        conn.close()
+
+    def _generate():
+        buffer = io.StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(CSV_COLUMNS)
+        yield _drain(buffer)
+        for record in records:
+            writer.writerow(record)
+            yield _drain(buffer)
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    return StreamingResponse(
+        _generate(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=votes-{stamp}.csv"},
+    )
