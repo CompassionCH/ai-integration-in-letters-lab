@@ -1,0 +1,153 @@
+{# #metrics inner content — KPI cards, detail grid, per-translator table.
+   Rendered inline by admin.html and standalone by GET /admin/metrics (hx-get). #}
+
+{% macro kpi(label, value) %}
+<div class="rounded-lg border border-slate-200 bg-white p-4 text-center shadow-sm">
+  <div class="text-2xl font-semibold text-slate-800">{{ value }}</div>
+  <div class="mt-1 text-xs uppercase tracking-wide text-slate-500">{{ label }}</div>
+</div>
+{% endmacro %}
+
+{% set p = metrics.preference %}
+{% set av = metrics.alert_verdicts %}
+{% set gt = metrics.ground_truth %}
+{% set c = metrics.cost %}
+{% set part = metrics.participation %}
+
+<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+  {{ kpi("Sessions", part.n_sessions) }}
+  {{ kpi("Votes", part.n_votes) }}
+  {{ kpi("AI at least as good", "%.0f%%"|format(p.ai_acceptable_pct * 100)) }}
+  {{ kpi("Cost (corpus)", "$%.2f"|format(c.total_usd)) }}
+</div>
+
+<div class="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+
+  {# A/B preference — both rates per the non-inferiority decision #}
+  <section class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <h2 class="mb-2 text-sm font-semibold text-slate-700">A/B preference — AI vs human reference</h2>
+    <div class="text-sm text-slate-600">
+      AI wins <b>{{ p.ai_wins }}</b> · Human wins <b>{{ p.human_wins }}</b> · Equivalent <b>{{ p.equivalent }}</b>
+      <span class="text-slate-400">({{ p.total }} votes)</span>
+    </div>
+    <div class="mt-2 text-sm text-slate-600">
+      AI at least as good: <b>{{ "%.0f%%"|format(p.ai_acceptable_pct * 100) }}</b>
+      <span class="text-xs text-slate-400">95% CI {{ "%.0f-%.0f%%"|format(p.acceptable_ci_low * 100, p.acceptable_ci_high * 100) }}</span>
+    </div>
+    <div class="text-sm text-slate-600">
+      AI preferred (decisive): <b>{{ "%.0f%%"|format(p.ai_preferred_pct * 100) }}</b>
+      <span class="text-xs text-slate-400">95% CI {{ "%.0f-%.0f%%"|format(p.preferred_ci_low * 100, p.preferred_ci_high * 100) }}</span>
+    </div>
+  </section>
+
+  {# Alert verdicts (precision-style) #}
+  <section class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <h2 class="mb-2 text-sm font-semibold text-slate-700">Alert verdicts</h2>
+    <div class="text-sm text-slate-600">✓ Correct <b>{{ av.overall.correct }}</b> · ✗ Incorrect <b>{{ av.overall.incorrect }}</b> · ~ Mixed <b>{{ av.overall.mixed }}</b></div>
+    {% for cat, v in av.per_category.items() %}
+    <div class="mt-2">
+      <div class="flex justify-between text-xs text-slate-500"><span>{{ cat }}</span><span>{{ v.total }}</span></div>
+      <div class="mt-0.5 flex h-2 overflow-hidden rounded bg-slate-100">
+        {% if v.total %}
+        <span class="bg-green-500" style="width: {{ (v.correct / v.total * 100) | round }}%"></span>
+        <span class="bg-rose-400" style="width: {{ (v.incorrect / v.total * 100) | round }}%"></span>
+        <span class="bg-amber-400" style="width: {{ (v.mixed / v.total * 100) | round }}%"></span>
+        {% endif %}
+      </div>
+    </div>
+    {% else %}
+    <div class="mt-1 text-sm text-slate-400">No alert evaluations.</div>
+    {% endfor %}
+  </section>
+
+  {# Missed issues (indicative recall) #}
+  <section class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <h2 class="mb-2 text-sm font-semibold text-slate-700">Missed issues</h2>
+    {% for cat, n in metrics.missed.per_category.items() %}
+    <div class="flex justify-between text-sm text-slate-600"><span>{{ cat }}</span><b>{{ n }}</b></div>
+    {% else %}
+    <div class="text-sm text-slate-400">No “missed issue” reports.</div>
+    {% endfor %}
+    {% if metrics.missed.total %}
+    <div class="mt-1 text-xs text-slate-400">{{ metrics.missed.total }} total</div>
+    {% endif %}
+  </section>
+
+  {# Ground truth — AI detection vs corpus labels #}
+  <section class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <h2 class="mb-2 text-sm font-semibold text-slate-700">Ground truth — issue letters</h2>
+    {% for cat, s in gt.per_category.items() %}
+    <div class="flex justify-between text-sm text-slate-600"><span>{{ cat }}</span><span>TP {{ s.tp }} · FN {{ s.fn }} · wrong {{ s.wrong_category }}</span></div>
+    {% else %}
+    <div class="text-sm text-slate-400">No ground-truth letters scored.</div>
+    {% endfor %}
+    <div class="mt-1 text-sm text-slate-600">FP-trap: <b>{{ gt.fp_trap.passed }}</b> passed · <b>{{ gt.fp_trap.failed }}</b> failed</div>
+    {% if gt.per_letter_detail %}
+    <details class="mt-2 text-xs text-slate-500">
+      <summary class="cursor-pointer">Per-letter detail ({{ gt.per_letter_detail | length }})</summary>
+      <table class="mt-1 w-full">
+        {% for d in gt.per_letter_detail %}
+        <tr class="border-t border-slate-100">
+          <td class="py-0.5">letter {{ d.letter_id }}</td>
+          <td>{{ d.expected }} → {{ d.emitted }}</td>
+          <td class="text-right"><a class="text-compassion hover:underline" href="/admin/letters/{{ d.letter_id }}.pdf" target="_blank" rel="noopener">view PDF</a></td>
+        </tr>
+        {% endfor %}
+      </table>
+    </details>
+    {% endif %}
+  </section>
+
+  {# Cost (USD) #}
+  <section class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <h2 class="mb-2 text-sm font-semibold text-slate-700">Cost (USD)</h2>
+    <div class="text-sm text-slate-600">Total <b>${{ "%.2f"|format(c.total_usd) }}</b> · per letter ${{ "%.4f"|format(c.per_letter_usd_avg) }}</div>
+    <div class="text-sm text-slate-600">Extrapolated / year (77 382 letters): <b>${{ "%.0f"|format(c.extrapolated_annual_usd) }}</b></div>
+    <div class="mt-1 text-xs text-slate-400">per page ${{ "%.4f"|format(c.extrapolated_annual_per_page_usd) }} · tokens in {{ c.tokens_in_total }} / out {{ c.tokens_out_total }}</div>
+  </section>
+
+  {# Votes per letter histogram #}
+  <section class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <h2 class="mb-2 text-sm font-semibold text-slate-700">Votes per letter</h2>
+    {% if part.votes_per_letter %}
+    {% set maxv = part.votes_per_letter.values() | max %}
+    {% for lid, n in part.votes_per_letter.items() %}
+    <div class="flex items-center gap-2 text-xs text-slate-500">
+      <a class="w-16 shrink-0 text-compassion hover:underline" href="/admin/letters/{{ lid }}.pdf" target="_blank" rel="noopener">letter {{ lid }}</a>
+      <span class="block h-2 rounded bg-compassion" style="width: {{ (n / maxv * 100) | round }}%"></span>
+      <span>{{ n }}</span>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="text-sm text-slate-400">No votes yet.</div>
+    {% endif %}
+  </section>
+</div>
+
+{# Per-translator breakdown — full width #}
+<section class="mt-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+  <h2 class="mb-2 text-sm font-semibold text-slate-700">Per-translator breakdown</h2>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-left text-xs uppercase tracking-wide text-slate-500">
+          <th class="py-1 pr-3">Translator</th><th class="pr-3">Votes</th>
+          <th class="pr-3">First vote</th><th class="pr-3">Last vote</th><th>Language pairs</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in part.per_translator %}
+        <tr class="border-t border-slate-100 text-slate-600">
+          <td class="py-1 pr-3">{{ t.first_name }} {{ t.last_name }}</td>
+          <td class="pr-3">{{ t.n_votes }}</td>
+          <td class="pr-3 text-slate-400">{{ t.first_vote_at }}</td>
+          <td class="pr-3 text-slate-400">{{ t.last_vote_at }}</td>
+          <td class="text-slate-400">{% for pair in t.language_pairs %}{{ pair[0] }}→{{ pair[1] }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="py-2 text-slate-400">No participation yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>

@@ -11,8 +11,8 @@ token (an accepted risk for a PoC with a single admin user). The ``/admin``
 paths are allow-listed out of the invite-token gate in ``security``; this
 module is their only protection.
 
-The metric blocks arrive with the analysis layer and the real template; this
-endpoint ships a minimal, context-complete stub so it stands alone.
+The dashboard renders the aggregated metrics (assembled in ``dashboard``) behind
+an HTMX-refreshed filter bar; the settings + CSV-export endpoints live here too.
 """
 from __future__ import annotations
 
@@ -28,6 +28,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import FileResponse, RedirectResponse, Response, StreamingResponse
 
 import config
+import dashboard
 from db import connect
 from templating import templates
 
@@ -154,27 +155,37 @@ def _active_model(conn, active_version) -> str | None:
     return row["model"] if row else None
 
 
-def _render_dashboard(request: Request) -> Response:
-    """Render the dashboard — for now the active prompt_version + model header,
-    plus any one-shot flash (e.g. a coverage warning after a version switch). The
-    metric blocks land with the analysis layer and the real template (which
-    replaces this stub)."""
+def _dashboard_context(request: Request) -> dict:
+    """Assemble the full dashboard view-model from the current query filters."""
     conn = connect()
     try:
         active_version = resolve_active_prompt_version(conn)
-        model = _active_model(conn, active_version)
+        filters = dashboard.parse_filters(request.query_params, active_version)
+        context = {
+            "active_prompt_version": active_version,
+            "model": _active_model(conn, active_version),
+            "metrics": dashboard.build_metrics(conn, filters),
+            "options": dashboard.dropdown_options(conn, active_version),
+        }
     finally:
         conn.close()
+    context["refreshed_at"] = datetime.now(timezone.utc).strftime("%H:%M:%S UTC")
+    context["current"] = {
+        "translator": request.query_params.get("translator", ""),
+        "letter": request.query_params.get("letter", ""),
+        "category": request.query_params.get("category", ""),
+        "version": request.query_params.get("version") or (active_version or ""),
+    }
+    return context
+
+
+def _render_dashboard(request: Request) -> Response:
+    """Render the full dashboard page, consuming any one-shot flash cookie (e.g. a
+    coverage warning set by a version switch) into base.html's flash slot."""
+    context = _dashboard_context(request)
     raw_flash = request.cookies.get(ADMIN_FLASH_COOKIE)
-    response = templates.TemplateResponse(
-        request=request,
-        name="admin.html",
-        context={
-            "active_prompt_version": active_version,
-            "model": model,
-            "flash": unquote(raw_flash) if raw_flash else None,
-        },
-    )
+    context["flash"] = unquote(raw_flash) if raw_flash else None
+    response = templates.TemplateResponse(request=request, name="admin.html", context=context)
     if raw_flash:
         response.delete_cookie(ADMIN_FLASH_COOKIE, path="/")
     return response
@@ -186,6 +197,19 @@ async def admin_dashboard(request: Request):
     if gate is not None:  # redirect-to-set-cookie or 401
         return gate
     return _render_dashboard(request)
+
+
+@router.get("/admin/metrics")
+async def admin_metrics(request: Request):
+    """The #metrics partial, re-rendered by the dashboard's filter hx-get."""
+    gate = _admin_auth_response(request)
+    if gate is not None:
+        return gate
+    return templates.TemplateResponse(
+        request=request,
+        name="partials/admin_metrics.html",
+        context=_dashboard_context(request),
+    )
 
 
 @router.get("/admin/letters/{letter_id}.pdf")

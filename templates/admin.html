@@ -1,26 +1,70 @@
 {% extends "base.html" %}
 {% block title %}Admin · Compassion Letter Lab{% endblock %}
 
-{# Minimal placeholder dashboard: surfaces only the active prompt version + model.
-   The metric blocks, filters and styling arrive with the dashboard layout work,
-   which replaces this template. #}
 {% block body %}
-<main class="mx-auto max-w-3xl px-4 py-8">
-  <h1 class="text-2xl font-semibold text-slate-800">Admin dashboard</h1>
+<main class="mx-auto max-w-6xl space-y-4 px-4 py-6">
 
-  <dl class="mt-4 space-y-1 text-sm text-slate-600">
-    <div class="flex gap-2">
-      <dt class="font-medium">Active prompt version:</dt>
-      <dd>{{ active_prompt_version | default("—", true) }}</dd>
+  {# Settings header: active version + change widget, model, last refresh #}
+  <header class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <div>
+      <h1 class="text-lg font-semibold text-slate-800">Admin dashboard</h1>
+      <p class="text-sm text-slate-500">
+        Model <span class="font-medium text-slate-700">{{ model | default("—", true) }}</span>
+        · active version <span class="font-medium text-slate-700">{{ active_prompt_version | default("—", true) }}</span>
+        · last refresh {{ refreshed_at }}
+      </p>
     </div>
-    <div class="flex gap-2">
-      <dt class="font-medium">Model:</dt>
-      <dd>{{ model | default("—", true) }}</dd>
-    </div>
-  </dl>
+    {% if options.versions %}
+    <form method="post" action="/admin/settings/active_prompt_version" class="flex items-center gap-2 text-sm">
+      <label for="active-version" class="text-slate-600">Set active</label>
+      <select id="active-version" name="prompt_version" class="rounded border-slate-300 text-sm">
+        {% for v in options.versions %}
+        <option value="{{ v.version }}" {% if v.version == active_prompt_version %}selected{% endif %}>
+          {{ v.version }} ({{ v.covered }}/{{ v.total }} letters)
+        </option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="rounded bg-compassion px-3 py-1 font-medium text-white hover:opacity-90">Apply</button>
+    </form>
+    {% endif %}
+  </header>
 
-  <p class="mt-6 text-sm text-slate-500">
-    Metrics will appear here as the analysis layer is connected.
-  </p>
+  {# Sticky filter bar (AND-combined) — a single hx-get re-renders #metrics #}
+  <div class="sticky top-12 z-10 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+    <form id="filters" class="flex flex-wrap items-center gap-2 text-sm"
+          hx-get="/admin/metrics" hx-target="#metrics" hx-trigger="change" hx-include="#filters">
+      <select name="translator" class="rounded border-slate-300 text-sm">
+        <option value="">All translators</option>
+        {% for t in options.translators %}
+        <option value="{{ t.id }}" {% if current.translator == t.id|string %}selected{% endif %}>{{ t.name }}</option>
+        {% endfor %}
+      </select>
+      <select name="letter" class="rounded border-slate-300 text-sm">
+        <option value="">All letters</option>
+        {% for l in options.letters %}
+        <option value="{{ l.id }}" {% if current.letter == l.id|string %}selected{% endif %}>{{ l.label }}</option>
+        {% endfor %}
+      </select>
+      <select name="category" class="rounded border-slate-300 text-sm">
+        <option value="">All categories</option>
+        {% for c in options.categories %}
+        <option value="{{ c.id }}" {% if current.category == c.id %}selected{% endif %}>{{ c.label }}</option>
+        {% endfor %}
+      </select>
+      <select name="version" class="rounded border-slate-300 text-sm">
+        <option value="__all__" {% if current.version == "__all__" %}selected{% endif %}>All versions</option>
+        {% for v in options.versions %}
+        <option value="{{ v.version }}" {% if current.version == v.version %}selected{% endif %}>{{ v.version }}</option>
+        {% endfor %}
+      </select>
+    </form>
+    <a href="/admin" class="text-sm text-slate-500 hover:underline">Reset filters</a>
+    <a href="/admin/export.csv" class="ml-auto text-sm font-medium text-compassion hover:underline">⬇ Download CSV</a>
+  </div>
+
+  {# All metric blocks live here — re-rendered by the filter hx-get #}
+  <div id="metrics">
+    {% include "partials/admin_metrics.html" %}
+  </div>
 </main>
 {% endblock %}
