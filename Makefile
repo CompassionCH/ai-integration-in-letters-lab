@@ -14,8 +14,9 @@ help: ## Show available targets
 $(TAILWIND):
 	./scripts/install_tailwind.sh
 
-install-assets: $(TAILWIND) ## Fetch the Tailwind binary, vendor HTMX + Inter fonts (pinned + SHA256-verified)
+install-assets: $(TAILWIND) ## Fetch the Tailwind binary, vendor HTMX + Alpine + Inter fonts (pinned + SHA256-verified)
 	./scripts/install_htmx.sh
+	./scripts/install_alpine.sh
 	./scripts/install_fonts.sh
 
 build-assets: $(TAILWIND) ## Compile the minified production CSS bundle

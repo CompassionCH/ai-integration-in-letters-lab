@@ -1,0 +1,47 @@
+/**
+ * Client-side "sprinkles" for Compassion Letter Lab.
+ *
+ * Alpine.js components are registered on the `alpine:init` event, which Alpine
+ * fires before it walks the DOM. This file is loaded (deferred) BEFORE the
+ * Alpine bundle, so the listener is attached in time.
+ *
+ * We use Alpine's CSP build: attribute expressions are limited to a small, safe
+ * subset (identifiers, member access, comparison, logical, ternary, string
+ * concat) and `eval()` is never used. So all real logic lives in the component
+ * methods below (plain JS) and the markup only references them by name
+ * (e.g. `x-on:input="check"`, `x-bind:disabled="!valid"`).
+ */
+
+document.addEventListener("alpine:init", () => {
+  /**
+   * Start-page form gate. Disables the submit button until the participant has
+   * entered both names and ticked at least one source and one target language.
+   *
+   * Bound in templates/start.html with `x-data="startForm"` on the <form>, so
+   * `this.$el` is the form element. It only READS the form state — the inputs
+   * stay plain server-rendered HTML, which keeps the server's values (including
+   * those re-rendered after a rejected submit) authoritative.
+   */
+  window.Alpine.data("startForm", () => ({
+    /** @type {boolean} whether every required field is satisfied */
+    valid: false,
+
+    /** Recompute {@link valid} from the current form state. */
+    check() {
+      const form = /** @type {HTMLFormElement} */ (this.$el);
+      const named =
+        form.first_name.value.trim() !== "" &&
+        form.last_name.value.trim() !== "";
+      const hasSource =
+        form.querySelectorAll('input[name="source_langs"]:checked').length > 0;
+      const hasTarget =
+        form.querySelectorAll('input[name="target_langs"]:checked').length > 0;
+      this.valid = named && hasSource && hasTarget;
+    },
+
+    /** Alpine lifecycle hook — seed {@link valid} from the initial markup. */
+    init() {
+      this.check();
+    },
+  }));
+});

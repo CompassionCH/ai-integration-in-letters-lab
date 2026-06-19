@@ -14,6 +14,13 @@ async def home(request: Request):
     return templates.TemplateResponse(request=request, name="home.html", context={})
 
 
+@router.get("/start")
+async def start(request: Request):
+    # The name + languages form; it posts to POST /session/start. Behind the
+    # invite gate (not allowlisted), like the landing.
+    return templates.TemplateResponse(request=request, name="start.html", context={})
+
+
 @router.get("/robots.txt", response_class=PlainTextResponse)
 async def robots() -> str:
     # The tool serves real correspondence on a public host: never index it.

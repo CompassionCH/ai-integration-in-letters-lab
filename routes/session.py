@@ -1,4 +1,6 @@
 """Session lifecycle: start and sign-out."""
+from __future__ import annotations
+
 import logging
 import uuid
 
@@ -71,14 +73,20 @@ async def session_start(
     target_langs: list[str] = Form(default=[]),
 ):
     if not _has_supported_lang(source_langs) or not _has_supported_lang(target_langs):
+        # Re-render the form inline with the error and the values already entered,
+        # so the participant can fix the languages without re-typing.
         return templates.TemplateResponse(
             request=request,
-            name="session_error.html",
+            name="start.html",
             context={
-                "message": (
+                "error": (
                     "Please choose at least one source and one target language "
                     "from French, German, Italian or English."
-                )
+                ),
+                "first_name": first_name,
+                "last_name": last_name,
+                "source_langs": source_langs,
+                "target_langs": target_langs,
             },
             status_code=422,
         )

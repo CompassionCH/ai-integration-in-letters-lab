@@ -8,6 +8,11 @@
   <link rel="icon" type="image/png" href="/static/branding/favicon.png">
   <link rel="stylesheet" href="/static/css/app.css">
   <script src="/static/vendor/htmx.min.js" defer></script>
+  {# app.js registers Alpine components on `alpine:init`; it must load before the
+     Alpine bundle so the listener is attached before Alpine starts. Both deferred,
+     so they execute in document order. Alpine is the CSP build (no eval). #}
+  <script src="/static/js/app.js" defer></script>
+  <script src="/static/vendor/alpine.csp.min.js" defer></script>
 </head>
 <body class="min-h-screen bg-slate-100 font-sans text-slate-800">
   <header class="sticky top-0 z-20 flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-4 py-2 shadow-sm">
