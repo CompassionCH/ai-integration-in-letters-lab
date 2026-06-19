@@ -30,18 +30,12 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+from analysis._common import get_value, passes_filters
+
 # Two-sided 95% interval -> standard-normal quantile. (Wilson / Bayesian
 # intervals are explicitly out of scope; the normal approximation is the agreed
 # estimator (a small-n caveat applies).)
 _Z_95 = 1.96
-
-# Filterable dimensions. A vote is kept only if it matches every filter present
-# in the dict; ``"__all__"`` (or an absent key) disables that dimension.
-# ``alert_category`` / ``prompt_version`` are expected to ride on each row from
-# the caller's join to ``ai_responses``; ``translator_id`` is the session/
-# translator identity the caller aliases onto the row (the schema stores it as
-# ``session_id``).
-_FILTER_KEYS = ("translator_id", "letter_id", "alert_category", "prompt_version")
 
 
 @dataclass(frozen=True)
@@ -59,29 +53,6 @@ class PreferenceReport:
     ai_acceptable_pct: float
     acceptable_ci_low: float
     acceptable_ci_high: float
-
-
-def _get(row, key):
-    """Read ``key`` from a dict or sqlite3.Row, returning None if absent.
-
-    (sqlite3.Row raises IndexError for unknown keys; dict raises KeyError.)
-    """
-    try:
-        return row[key]
-    except (KeyError, IndexError):
-        return None
-
-
-def _passes_filters(row, filters) -> bool:
-    for key in _FILTER_KEYS:
-        if key not in filters:
-            continue
-        wanted = filters[key]
-        if wanted == "__all__":
-            continue
-        if _get(row, key) != wanted:
-            return False
-    return True
 
 
 def _proportion_ci(successes: int, n: int) -> tuple[float, float, float]:
@@ -103,24 +74,24 @@ def aggregate_preference(votes, filters=None) -> PreferenceReport:
     ``votes`` is any iterable of mappings (dict or sqlite3.Row) carrying at least
     ``preference`` ('A' / 'B' / 'Equivalent', or NULL for synthetic letters) and
     ``a_is_ai`` (1 if column A held the AI text, 0 if A held the human text),
-    plus whichever of ``_FILTER_KEYS`` the caller filters on.
+    plus whichever of the shared ``FILTER_KEYS`` the caller filters on.
 
-    ``filters`` is an optional dict over ``_FILTER_KEYS``; ``"__all__"`` or an
-    absent key means "no constraint" on that dimension.
+    ``filters`` is an optional dict over the shared ``FILTER_KEYS``; ``"__all__"``
+    or an absent key means "no constraint" on that dimension.
     """
     filters = filters or {}
     ai_wins = human_wins = equivalent = 0
 
     for row in votes:
-        if not _passes_filters(row, filters):
+        if not passes_filters(row, filters):
             continue
-        preference = _get(row, "preference")
+        preference = get_value(row, "preference")
         if preference is None:
             continue  # synthetic letter -> no A/B card -> not a preference vote
         if preference == "Equivalent":
             equivalent += 1
             continue
-        a_is_ai = _get(row, "a_is_ai")
+        a_is_ai = get_value(row, "a_is_ai")
         if preference not in ("A", "B") or a_is_ai is None:
             continue  # unmappable row -> skip rather than miscount
         # a_is_ai == 1 means column A held the AI text. The AI is the chosen side
