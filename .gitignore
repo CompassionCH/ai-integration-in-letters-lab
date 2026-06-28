@@ -18,6 +18,9 @@ letters/synthetic/
 
 # Gemini pre-processing outputs (contain translations, alert reasons)
 pre_processing/results/
+# Benchmark outputs (contain real-letter translations + alert reasons)
+benchmark/results/
+benchmark/results_backup/
 
 # Build artefacts
 static/css/app.css
