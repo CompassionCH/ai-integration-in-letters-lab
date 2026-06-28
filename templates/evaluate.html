@@ -23,13 +23,13 @@
       <div class="rounded-md border border-slate-200 p-2">
         <p class="font-semibold uppercase tracking-wide text-slate-400">Child</p>
         <p class="mt-1 font-medium text-slate-800">{{ child_preferred }}{% if child_official and child_official != child_preferred %} <span class="font-normal text-slate-500">(official: {{ child_official }})</span>{% endif %}</p>
-        <p class="text-slate-500">{{ child_sex }} · {{ child_age }} · {{ country }}</p>
+        <p class="text-slate-500">{{ child_sex }} · {{ child_age | default('Unknown', true) }} · {{ country }}</p>
       </div>
       <div class="rounded-md border border-slate-200 p-2">
         <p class="font-semibold uppercase tracking-wide text-slate-400">Sponsor</p>
         <p class="mt-1 font-medium text-slate-800">{{ sponsor_first }}</p>
         {% if sponsor_other_first_names_csv %}<p class="text-slate-500">also: {{ sponsor_other_first_names_csv }}</p>{% endif %}
-        <p class="text-slate-500">{{ sponsor_sex }} · {{ sponsor_age }}</p>
+        <p class="text-slate-500">{{ sponsor_sex }} · {{ sponsor_age | default('Unknown', true) }}</p>
       </div>
       <div class="rounded-md border border-slate-200 p-2">
         <p class="font-semibold uppercase tracking-wide text-slate-400">Letter</p>
@@ -70,7 +70,7 @@
       {# 2. A/B preference — only for letters with a human translation (parity rule: identical boxes). #}
       {% if show_ab_card %}
       <section>
-        <p class="text-sm font-medium text-slate-700">Which translation reads better?</p>
+        <p class="text-sm font-medium text-slate-700">Which translation do you prefer?</p>
         <div class="mt-2 grid grid-cols-2 gap-3">
           <div>
             <p class="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">A</p>

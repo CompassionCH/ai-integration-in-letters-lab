@@ -51,4 +51,6 @@ async def test_progress_slot_renders_when_context_has_totals(logged_in, tmp_db):
         conn.close()
     resp = await client.get("/evaluate", follow_redirects=False)
     assert resp.status_code == 200
-    assert "Letter 0 / 1" in resp.text  # base.html progress slot (n_done / n_total)
+    # base.html progress slot shows the 1-based position of the letter on screen:
+    # nothing voted yet (n_done = 0), so the first of one letter reads "Letter 1 / 1".
+    assert "Letter 1 / 1" in resp.text

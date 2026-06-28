@@ -22,13 +22,15 @@
     </a>
 
     <div class="flex items-center gap-4">
-      {# Progress slot — only on pages that pass n_done / n_total (the evaluation flow). #}
+      {# Progress slot — only on pages that pass n_done / n_total (the evaluation flow).
+         n_done is the count already voted, so the letter on screen is the (n_done + 1)th;
+         show that 1-based position (never exceeds n_total, since an unvoted letter is shown). #}
       {% if n_total is defined and n_total %}
       <div class="flex items-center gap-2 text-sm text-slate-500" aria-label="Progress">
-        <span class="whitespace-nowrap">Letter {{ n_done | default(0) }} / {{ n_total }}</span>
+        <span class="whitespace-nowrap">Letter {{ (n_done | default(0)) + 1 }} / {{ n_total }}</span>
         <span class="block h-1.5 w-24 overflow-hidden rounded-full bg-slate-200">
           <span class="block h-full rounded-full bg-compassion"
-                style="width: {{ ((n_done | default(0)) / n_total * 100) | round }}%"></span>
+                style="width: {{ (((n_done | default(0)) + 1) / n_total * 100) | round }}%"></span>
         </span>
       </div>
       {% endif %}
