@@ -38,6 +38,22 @@ async def lifespan(app: FastAPI):
     # startup rather than serve 500s on the first /admin request. (Lifespan does
     # not run under the test ASGI transport, so the suite is unaffected.)
     config.admin_token()
+    # Load the corpus + pre-computed AI results into the DB (idempotent; best-effort so a
+    # missing corpus in local/seed mode does not crash the app). Production has corpus.json.
+    try:
+        from pathlib import Path
+        from db.init import init_db
+        from pre_processing import load_results
+
+        init_db(config.db_path())
+        corpus = Path(config.letters_dir()) / "corpus.json"
+        if corpus.exists():
+            counts = load_results.load(config.db_path(), [str(corpus)], "pre_processing/results")
+            logger.info("Loaded pre-processing results: %s", counts)
+        else:
+            logger.info("No corpus at %s; skipping result load (dev/seed mode?).", corpus)
+    except Exception:
+        logger.exception("Startup result load failed (continuing).")
     # Startup: warn about letters a safety filter excludes from serving (best-effort).
     evaluate.warn_safety_filtered()
     yield

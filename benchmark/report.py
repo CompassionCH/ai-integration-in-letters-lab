@@ -32,11 +32,7 @@ from pathlib import Path
 
 from data.corpus import LetterMetadata, load_corpus
 from benchmark.score_screening import tally  # reuse the screening scoring, do not reimplement
-
-# Mirrors benchmark/run.py PDF resolution. Replicated (not imported) because importing
-# run.py has import-time side effects (it reads the response schema + pricing files).
-_PDF_ROOTS = (Path("letters"), Path("."))
-
+from pre_processing.gemini import resolve_pdf  # shared PDF resolution (one copy)
 
 # --------------------------------------------------------------------------- view model
 
@@ -90,14 +86,6 @@ class ReportView:
 
 
 # --------------------------------------------------------------------------- assembly
-
-def _resolve_pdf(letter: LetterMetadata) -> str | None:
-    for root in _PDF_ROOTS:
-        p = root / letter.pdf_path
-        if p.exists():
-            return str(p)
-    return None  # missing PDF must not crash; render shows a placeholder
-
 
 def _result_path(results_dir: Path, model: str, strategy: str, letter_id: str) -> Path:
     return Path(results_dir) / model / strategy / f"{letter_id}.json"
@@ -194,7 +182,7 @@ def build_report(letters: list, results_dir, models: list, strategies: list) -> 
         views.append(LetterView(
             id=letter.id,
             metadata=letter,
-            pdf_path=_resolve_pdf(letter),
+            pdf_path=resolve_pdf(letter),
             human_translation=letter.human_translation,
             gold_category=getattr(gt, "expected_category", None),
             rationale=getattr(gt, "rationale", None),

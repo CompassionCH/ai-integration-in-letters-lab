@@ -1,10 +1,12 @@
-"""Strategy-aware prompt assembler for the translation-strategy benchmark.
+"""Strategy-aware prompt assembler for the translation + screening pipeline.
 
 Builds the per-letter prompt for one strategy (A / D / F, with an optional
 per-paragraph length budget) from the static `system_prompt_v1.md` template plus
 the letter metadata. Pure string assembly; no IO beyond reading the prompt files.
 
-This is a quick prototype that informs the production assembler. The strategies:
+Canonical assembler for both the production runner (`pre_processing.run_gemini`,
+strategy F) and the benchmark (`benchmark.run`). A and D are research-only (the
+benchmark chose F); production uses F. The strategies:
 
 - **A** — translate the whole letter as one block; the scorer re-splits it to N
   source paragraphs afterwards. The known-weak baseline.
