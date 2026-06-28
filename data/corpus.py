@@ -26,8 +26,11 @@ class Child(BaseModel):
 class Sponsor(BaseModel):
     first_name: str
     other_sponsored_first_names: list[str] = []
-    sex: Literal["M", "F"]
-    age: int
+    # Salutation / addressee form as extracted from the source system (e.g. "Madam",
+    # "Mister", "Family", "Mister and Madam"). A sponsor may be a couple or a family,
+    # so unlike a child this is not a binary M/F. Age is frequently unavailable.
+    sex: str
+    age: int | None = None
 
 
 class TranslationQueue(BaseModel):
