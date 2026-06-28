@@ -75,8 +75,11 @@ def _source_block(letter: LetterMetadata, strategy: str, *, budget: bool) -> str
         f"Translate each of the {n} source paragraphs listed below. Return **exactly {n} "
         f"translations** — one per `sequence`, keeping the same numbers and order. Do **not** split "
         "a source paragraph into several entries (even when it is long or contains multiple "
-        "sentences, list items, or line breaks), and do **not** merge paragraphs. Use the attached "
-        "PDF for visual context (handwriting, layout, photos).",
+        "sentences, list items, or line breaks), and do **not** merge paragraphs. The listed text is "
+        "an alignment anchor and may be an incomplete transcription: treat the attached PDF as the "
+        "source of truth and, for each `sequence`, translate the complete content visible on that "
+        "part of the page (including pre-printed form questions and checkbox answers), not merely the "
+        "text shown here.",
         "",
     ]
     for i, para in enumerate(letter.paragraphs or [], start=1):
@@ -84,7 +87,7 @@ def _source_block(letter: LetterMetadata, strategy: str, *, budget: bool) -> str
         if budget:
             ref = max(len(para.source_text or ""), len(para.human_translation or ""))
             hint = f" _(aim for roughly {round(ref * _BUDGET_FACTOR)} characters)_"
-        lines.append(f"{i}. {(para.source_text or '').strip()}{hint}")
+        lines.append(f"{i}. (page {para.page_index + 1}) {(para.source_text or '').strip()}{hint}")
     return "\n".join(lines)
 
 

@@ -43,9 +43,17 @@ is in English **except** the translated paragraph text.
 ## Translation rules
 
 - A letter may or may not include an embedded typed English version (a pivot translation) alongside
-  the original handwritten/scanned text. **Both situations are normal.** When an English version is
-  present, translate from it; otherwise translate directly from the original. Do **not** raise a
-  language issue based on whether or not an English version is included.
+  the original handwritten/scanned text. **Both situations are normal**, and you must **not** raise a
+  language issue based on whether one is included. The pivot is a useful aid, but it is often an
+  **incomplete** transcription — on forms especially, it tends to drop the pre-printed questions and
+  any checkbox or circled answers. **The PDF page is the source of truth**: translate the complete
+  content visible on the page, not merely the pivot text, and never reproduce a gap just because the
+  pivot has one.
+- Some pages are pre-printed **forms or questionnaires** (for example a "My family" sheet: questions
+  with checkbox, multiple-choice, or fill-in answers). Read these from the PDF and translate the
+  **whole** item — pair each pre-printed question with the writer's answer, including answers shown
+  only by a ticked box or a circled option (visible in the image, often absent from the text), so
+  each line reads as a complete statement the way the page does.
 - A page may be a photo, a drawing, or a scan with little or no text. Translate whatever text is
   present; describe nothing that is not text.
 - Some pages carry machine or administrative markers that are **not** part of the writer's message:
