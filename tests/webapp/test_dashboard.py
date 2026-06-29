@@ -1,7 +1,7 @@
 """Tests for dashboard.py — filter parsing + a smoke test of the view-model assembly."""
 import math
 
-from dashboard import build_metrics, dropdown_options, parse_filters
+from dashboard import build_metrics, dropdown_options, letter_labels, parse_filters
 from db import connect
 
 
@@ -74,5 +74,33 @@ def test_dropdown_options_smoke(tmp_db):
     finally:
         conn.close()
     assert [t["name"] for t in opts["translators"]] == ["Mae Tan"]
-    assert opts["letters"][0]["label"] == "aaa00001"
+    assert opts["letters"][0]["label"] == "aaa00001"  # no corpus_id -> falls back to the opaque ref
     assert opts["versions"][0] == {"version": "v1", "covered": 1, "total": 1}
+
+
+def test_admin_labels_prefer_corpus_id(tmp_db):
+    """The dropdown label and the letter_labels map show the human-readable corpus
+    id (e.g. S-022) when present, so the admin can locate a specific source letter."""
+    conn = connect(tmp_db)
+    try:
+        cur = conn.execute(
+            "INSERT INTO letters (display_ref, corpus_id, type, target_lang)"
+            " VALUES ('zzz00009', 'S-022', 'synthetic', 'fr')"
+        )
+        lid = cur.lastrowid
+        cur = conn.execute(
+            "INSERT INTO ai_responses (letter_id, prompt_version, model) VALUES (?, 'v1', 'm')", (lid,)
+        )
+        aid = cur.lastrowid
+        cur = conn.execute("INSERT INTO sessions (session_token, first_name, last_name) VALUES ('t2','A','B')")
+        conn.execute(
+            "INSERT INTO votes (session_id, letter_id, ai_response_id) VALUES (?, ?, ?)",
+            (cur.lastrowid, lid, aid),
+        )
+        conn.commit()
+        opts = dropdown_options(conn, "v1")
+        labels = letter_labels(conn)
+    finally:
+        conn.close()
+    assert opts["letters"][0]["label"] == "S-022"  # corpus id, not the opaque ref
+    assert labels[lid] == "S-022"

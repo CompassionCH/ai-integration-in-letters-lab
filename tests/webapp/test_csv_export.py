@@ -11,7 +11,7 @@ ADMIN_COOKIE = hmac.new(ADMIN_TOKEN.encode(), b"admin", "sha256").hexdigest()
 
 EXPECTED_COLUMNS = [
     "session_id", "translator_first_name", "translator_last_name", "letter_id",
-    "letter_type", "direction", "source_lang", "target_lang", "country",
+    "corpus_id", "letter_type", "direction", "source_lang", "target_lang", "country",
     "preference", "preference_comment", "ai_response_id", "a_is_ai",
     "alert_category", "alert_verdict", "alert_comment", "missed_yes_no",
     "missed_category", "missed_reason", "prompt_version", "model", "voted_at_iso",
@@ -23,8 +23,8 @@ def _seed_full_vote(db_path, *, comment="Good translation"):
     conn = connect(db_path)
     try:
         cur = conn.execute(
-            "INSERT INTO letters (display_ref, type, direction, source_lang, target_lang, country)"
-            " VALUES ('ref00001', 'real', 'child_to_sponsor', 'en', 'fr', 'Kenya')"
+            "INSERT INTO letters (display_ref, corpus_id, type, direction, source_lang, target_lang, country)"
+            " VALUES ('ref00001', 'R-001', 'real', 'child_to_sponsor', 'en', 'fr', 'Kenya')"
         )
         lid = cur.lastrowid
         cur = conn.execute(
@@ -75,6 +75,7 @@ async def test_export_csv_columns_and_row(client, tmp_db):
     assert row["translator_first_name"] == "Mae"
     assert row["translator_last_name"] == "Tan"
     assert row["letter_id"] == str(ids["letter_id"])
+    assert row["corpus_id"] == "R-001"  # human-readable corpus id, for cross-referencing the source
     assert row["letter_type"] == "real"
     assert row["direction"] == "child_to_sponsor"
     assert row["source_lang"] == "en"

@@ -88,7 +88,7 @@
       <table class="mt-1 w-full">
         {% for d in gt.per_letter_detail %}
         <tr class="border-t border-slate-100">
-          <td class="py-0.5">letter {{ d.letter_id }}</td>
+          <td class="py-0.5">{{ letter_labels.get(d.letter_id, d.letter_id) }}</td>
           <td>{{ d.expected }} → {{ d.emitted }}</td>
           <td class="text-right"><a class="text-compassion hover:underline" href="/admin/letters/{{ d.letter_id }}.pdf" target="_blank" rel="noopener">view PDF</a></td>
         </tr>

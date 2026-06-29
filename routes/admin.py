@@ -166,6 +166,7 @@ def _dashboard_context(request: Request) -> dict:
             "model": _active_model(conn, active_version),
             "metrics": dashboard.build_metrics(conn, filters),
             "options": dashboard.dropdown_options(conn, active_version),
+            "letter_labels": dashboard.letter_labels(conn),
         }
     finally:
         conn.close()
@@ -298,6 +299,7 @@ CSV_COLUMNS = (
     "translator_first_name",
     "translator_last_name",
     "letter_id",
+    "corpus_id",
     "letter_type",
     "direction",
     "source_lang",
@@ -327,6 +329,7 @@ _EXPORT_QUERY = """
         s.first_name          AS translator_first_name,
         s.last_name           AS translator_last_name,
         v.letter_id           AS letter_id,
+        l.corpus_id           AS corpus_id,
         l.type                AS letter_type,
         l.direction           AS direction,
         l.source_lang         AS source_lang,

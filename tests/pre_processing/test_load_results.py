@@ -109,6 +109,9 @@ def test_load_letters_responses_and_paragraphs(tmp_path):
     assert conn.execute("SELECT COUNT(*) FROM ai_response_paragraphs").fetchone()[0] == 3  # 2 + 1
     assert conn.execute("SELECT ground_truth_category FROM letters WHERE display_ref=?",
                         (display_ref("S-001"),)).fetchone()[0] == "child_protection"
+    # corpus id persisted verbatim (admin views map the opaque ref back to R-/S- ids)
+    assert conn.execute("SELECT corpus_id FROM letters WHERE display_ref=?",
+                        (display_ref("S-001"),)).fetchone()[0] == "S-001"
     conn.close()
 
 

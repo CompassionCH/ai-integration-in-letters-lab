@@ -58,7 +58,7 @@ def join_translations(translations) -> str:
 # --------------------------------------------------------------------------- DB upserts
 
 _LETTER_COLS = [
-    "display_ref", "type", "pdf_path", "direction", "source_lang", "target_lang", "country",
+    "display_ref", "corpus_id", "type", "pdf_path", "direction", "source_lang", "target_lang", "country",
     "child_official", "child_preferred", "child_sex", "child_age",
     "sponsor_first", "sponsor_other_first_names_csv", "sponsor_sex", "sponsor_age",
     "human_translation_text", "ground_truth_category", "ground_truth_rationale",
@@ -70,6 +70,7 @@ def _letter_row(letter) -> dict:
     q = letter.translation_queue
     return {
         "display_ref": display_ref(letter.id),
+        "corpus_id": letter.id,
         "type": letter.type,
         "pdf_path": letter.pdf_path,
         "direction": letter.direction,

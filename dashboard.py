@@ -89,9 +89,9 @@ def dropdown_options(conn, active_version):
         )
     ]
     letters = [
-        {"id": r["id"], "label": r["display_ref"] or f"letter {r['id']}"}
+        {"id": r["id"], "label": r["corpus_id"] or r["display_ref"] or f"letter {r['id']}"}
         for r in conn.execute(
-            "SELECT DISTINCT l.id, l.display_ref FROM letters l"
+            "SELECT DISTINCT l.id, l.corpus_id, l.display_ref FROM letters l"
             " JOIN votes v ON v.letter_id = l.id ORDER BY l.id"
         )
     ]
@@ -119,6 +119,16 @@ def dropdown_options(conn, active_version):
         "categories": cats,
         "versions": versions,
         "active_version": active_version,
+    }
+
+
+def letter_labels(conn):
+    """Map every letter's db id to its human-readable corpus id (e.g. R-001) for
+    the admin views. Falls back to the opaque ref, then the numeric id, when a
+    corpus id is absent. Admin-only — the volunteer flow never shows this."""
+    return {
+        r["id"]: (r["corpus_id"] or r["display_ref"] or f"letter {r['id']}")
+        for r in conn.execute("SELECT id, corpus_id, display_ref FROM letters")
     }
 
 

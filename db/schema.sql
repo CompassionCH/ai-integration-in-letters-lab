@@ -6,6 +6,7 @@
 CREATE TABLE IF NOT EXISTS letters (
     id                            INTEGER PRIMARY KEY,
     display_ref                   TEXT UNIQUE,          -- opaque client-facing ref (computed later); NULL until set
+    corpus_id                     TEXT,                 -- human-readable source id from corpus.json (e.g. R-001); admin views only, never sent to volunteers
     type                          TEXT,                 -- experimental stratum; server-side only, never sent to clients
     pdf_path                      TEXT,
     direction                     TEXT,
