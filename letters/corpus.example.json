@@ -10,7 +10,7 @@
     "  letters            — array of letter entries (1..40 in practice; loader supports any count)",
     "",
     "Per-letter fields:",
-    "  id                 — R-NNN for real letters, S-NNN for synthetic",
+    "  id                 — origin + expected verdict: R-NNN real/accept, S-NNN synthetic/accept (FP-trap), RI-NNN real/alert (issue), SI-NNN synthetic/alert (issue); admin-only, never sent to volunteers",
     "  type               — 'real' | 'synthetic'",
     "  pdf_path           — path relative to letters/, e.g. 'real/R-001.pdf'",
     "  direction          — 'child_to_sponsor' (B→S) | 'sponsor_to_child' (S→B)",
