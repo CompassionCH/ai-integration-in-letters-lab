@@ -104,3 +104,37 @@ def test_admin_labels_prefer_corpus_id(tmp_db):
         conn.close()
     assert opts["letters"][0]["label"] == "S-022"  # corpus id, not the opaque ref
     assert labels[lid] == "S-022"
+
+
+def test_votes_per_letter_ordered_by_corpus_id(tmp_db):
+    """The votes-per-letter histogram is ordered by corpus id (R before S, numeric
+    within), not by vote-insertion order."""
+    conn = connect(tmp_db)
+    ids = {}
+    try:
+        # Insert S-002 first, then R-001, so insertion order != corpus order.
+        for ref, cid in [("ref0000s", "S-002"), ("ref0000r", "R-001")]:
+            cur = conn.execute(
+                "INSERT INTO letters (display_ref, corpus_id, type, target_lang)"
+                " VALUES (?, ?, 'synthetic', 'fr')",
+                (ref, cid),
+            )
+            lid = cur.lastrowid
+            ids[cid] = lid
+            aid = conn.execute(
+                "INSERT INTO ai_responses (letter_id, prompt_version, model) VALUES (?, 'v1', 'm')",
+                (lid,),
+            ).lastrowid
+            sid = conn.execute(
+                "INSERT INTO sessions (session_token, first_name, last_name) VALUES (?, 'A', 'B')",
+                (cid,),
+            ).lastrowid
+            conn.execute(
+                "INSERT INTO votes (session_id, letter_id, ai_response_id) VALUES (?, ?, ?)",
+                (sid, lid, aid),
+            )
+        conn.commit()
+        m = build_metrics(conn, {"prompt_version": "v1"})
+    finally:
+        conn.close()
+    assert list(m["participation"].votes_per_letter.keys()) == [ids["R-001"], ids["S-002"]]

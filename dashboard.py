@@ -8,6 +8,8 @@ admin route module.
 """
 from __future__ import annotations
 
+from dataclasses import replace
+
 import categories
 from analysis.alerts import aggregate_alert_verdicts, aggregate_missed_issues
 from analysis.cost import aggregate_cost
@@ -59,15 +61,23 @@ def build_metrics(conn, filters):
     sessions = conn.execute(
         "SELECT id, first_name, last_name, source_langs_csv, target_langs_csv FROM sessions"
     ).fetchall()
+    participation = aggregate_participation(
+        sessions, conn.execute(_PARTICIPATION_VOTES).fetchall(), filters
+    )
+    # Order the votes-per-letter histogram by human-readable corpus id (R-001, S-022,
+    # ...) so the admin reads it by name rather than by vote-insertion order.
+    labels = letter_labels(conn)
+    ordered = dict(
+        sorted(participation.votes_per_letter.items(), key=lambda kv: labels.get(kv[0], str(kv[0])))
+    )
+    participation = replace(participation, votes_per_letter=ordered)
     return {
         "preference": aggregate_preference(conn.execute(_PREFERENCE_VOTES).fetchall(), filters),
         "alert_verdicts": aggregate_alert_verdicts(conn.execute(_ALERT_EVALS).fetchall(), filters),
         "missed": aggregate_missed_issues(conn.execute(_MISSED).fetchall(), filters),
         "cost": aggregate_cost(ai_rows, filters=filters),
         "ground_truth": score_ground_truth(letters, ai_rows, filters),
-        "participation": aggregate_participation(
-            sessions, conn.execute(_PARTICIPATION_VOTES).fetchall(), filters
-        ),
+        "participation": participation,
     }
 
 

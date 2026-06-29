@@ -113,7 +113,7 @@
     {% set maxv = part.votes_per_letter.values() | max %}
     {% for lid, n in part.votes_per_letter.items() %}
     <div class="flex items-center gap-2 text-xs text-slate-500">
-      <a class="w-16 shrink-0 text-compassion hover:underline" href="/admin/letters/{{ lid }}.pdf" target="_blank" rel="noopener">letter {{ lid }}</a>
+      <a class="w-16 shrink-0 text-compassion hover:underline" href="/admin/letters/{{ lid }}.pdf" target="_blank" rel="noopener">{{ letter_labels.get(lid, lid) }}</a>
       <span class="block h-2 rounded bg-compassion" style="width: {{ (n / maxv * 100) | round }}%"></span>
       <span>{{ n }}</span>
     </div>
