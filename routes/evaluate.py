@@ -261,7 +261,6 @@ async def evaluate(request: Request):
         "child_age": letter["child_age"],
         "country": letter["country"],
         "sponsor_first": letter["sponsor_first"],
-        "sponsor_other_first_names_csv": letter["sponsor_other_first_names_csv"],
         "sponsor_sex": letter["sponsor_sex"],
         "sponsor_age": letter["sponsor_age"],
         "source_lang": letter["source_lang"],

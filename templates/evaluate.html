@@ -35,6 +35,9 @@
     </div>
     {% endif %}
 
+    {# Language codes to full display names; falls back to the upper-cased code. #}
+    {% set lang_names = {"fr": "French", "de": "German", "it": "Italian", "en": "English"} %}
+
     {# Metadata header — three cards, stays at the top of the right pane. #}
     <div class="grid shrink-0 grid-cols-3 gap-2 border-b border-slate-200 bg-white px-4 py-3 text-xs">
       <div class="rounded-md border border-slate-200 p-2">
@@ -45,13 +48,16 @@
       <div class="rounded-md border border-slate-200 p-2">
         <p class="font-semibold uppercase tracking-wide text-slate-400">Sponsor</p>
         <p class="mt-1 font-medium text-slate-800">{{ sponsor_first }}</p>
-        {% if sponsor_other_first_names_csv %}<p class="text-slate-500">also: {{ sponsor_other_first_names_csv }}</p>{% endif %}
         <p class="text-slate-500">{{ sponsor_sex }} · {{ sponsor_age | default('Unknown', true) }}</p>
       </div>
       <div class="rounded-md border border-slate-200 p-2">
         <p class="font-semibold uppercase tracking-wide text-slate-400">Letter</p>
         <p class="mt-1 font-mono text-slate-800">{{ display_ref }}</p>
-        <p class="text-slate-500">{{ source_lang | upper }} &rarr; {{ target_lang | upper }}</p>
+        {% if show_ab_card %}
+        <p class="text-slate-500">{{ lang_names.get(source_lang, source_lang | upper) }} &rarr; {{ lang_names.get(target_lang, target_lang | upper) }}</p>
+        {% else %}
+        <p class="text-slate-500">No translation to compare.</p>
+        {% endif %}
       </div>
     </div>
 
