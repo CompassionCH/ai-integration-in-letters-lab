@@ -66,18 +66,67 @@ document.addEventListener("alpine:init", () => {
   }));
 
   /**
-   * Evaluation-page form. Tracks the missed-issue yes/no answer so the category +
-   * reason fields reveal (x-show) and become required (x-bind:required) only when
-   * "Yes" is chosen. Server-side validation stays authoritative either way; with
-   * JS off the fields simply stay visible and the server enforces them.
+   * Evaluation-page form. Tracks two things, both progressive enhancements over
+   * server-rendered HTML (the server stays authoritative; with JS off everything
+   * still works):
+   *
+   *  - the missed-issue yes/no answer, so the category + reason fields reveal
+   *    (x-show) and become required (x-bind:required) only when "Yes" is chosen;
+   *  - the preference answer, so the comment box's placeholder adapts to the
+   *    choice (a plain `placeholder=` attribute supplies a sensible default when
+   *    JS is off).
+   *
+   * It also holds the one-time welcome card's dismissed state. The card is only
+   * rendered on a volunteer's first letter; dismissing it hides it client-side
+   * and remembers that for the rest of the browser session, so reloading the
+   * first letter before voting does not reshow it.
    */
   window.Alpine.data("evalForm", () => ({
+    /** Session-storage key remembering that the welcome card was dismissed. */
+    WELCOME_KEY: "welcome_dismissed",
+
     /** @type {string} the selected missed_yes_no value ('' until answered) */
     missed: "",
+
+    /** @type {string} the selected preference value ('' until chosen) */
+    preference: "",
+
+    /** @type {boolean} whether the welcome card has been dismissed this session */
+    welcomeDismissed: false,
 
     /** Whether "Yes" is selected — drives the reveal + the fields' required state. */
     get missedYes() {
       return this.missed === "yes";
+    },
+
+    /** Placeholder for the preference comment, matched to the current choice. */
+    get preferenceCommentPlaceholder() {
+      if (this.preference === "A" || this.preference === "B") {
+        return "Why did you prefer this one? Your answer helps us improve the AI.";
+      }
+      if (this.preference === "Equivalent") {
+        return "Optional, what made them equally good?";
+      }
+      return "Tell us why, it helps us improve the AI.";
+    },
+
+    /** Hide the welcome card and remember the choice for this browser session. */
+    dismissWelcome() {
+      this.welcomeDismissed = true;
+      try {
+        window.sessionStorage.setItem(this.WELCOME_KEY, "1");
+      } catch (e) {
+        /* sessionStorage unavailable (private mode, etc.) — dismiss is still in effect for this view */
+      }
+    },
+
+    /** Alpine lifecycle hook — restore the dismissed state from this session. */
+    init() {
+      try {
+        this.welcomeDismissed = window.sessionStorage.getItem(this.WELCOME_KEY) === "1";
+      } catch (e) {
+        /* sessionStorage unavailable — leave the card shown */
+      }
     },
   }));
 });

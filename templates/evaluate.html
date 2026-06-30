@@ -18,6 +18,23 @@
   <form method="post" action="/evaluate/submit" class="flex min-w-0 flex-1 flex-col" x-data="evalForm">
     <input type="hidden" name="display_ref" value="{{ display_ref }}">
 
+    {# One-time welcome, shown on a volunteer's first letter only (n_done == 0),
+       then dismissed for the session. With JS off it simply stays visible (the
+       dismiss button is harmless). It sits above the sticky metadata header. #}
+    {% if n_done == 0 %}
+    <div x-show="!welcomeDismissed" class="shrink-0 border-b border-compassion/20 bg-compassion/10 px-4 py-3 text-sm text-slate-700">
+      <p class="font-semibold text-slate-800">Welcome, and thank you for helping.</p>
+      <div class="mt-2 space-y-3 leading-relaxed">
+        <p>On each letter you answer a few quick checks about the AI&rsquo;s work: whether its alert is right, which of two translations reads better, and whether it missed anything.</p>
+        <p>Not every letter has all of these. Some letters have no translation to compare, and the AI does not raise an alert on every letter. When a step does not apply it simply will not appear. That is normal, just answer what you see.</p>
+        <p>There are no wrong answers, your honest judgment is exactly what we need. You can stop any time, your progress is saved.</p>
+      </div>
+      <button type="button" x-on:click="dismissWelcome" class="mt-3 inline-flex items-center justify-center rounded-lg bg-compassion px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-compassion/90">
+        Got it, let&rsquo;s start
+      </button>
+    </div>
+    {% endif %}
+
     {# Metadata header — three cards, stays at the top of the right pane. #}
     <div class="grid shrink-0 grid-cols-3 gap-2 border-b border-slate-200 bg-white px-4 py-3 text-xs">
       <div class="rounded-md border border-slate-200 p-2">
@@ -38,19 +55,24 @@
       </div>
     </div>
 
-    {# Scrolling middle — order: alert -> A/B -> missed. #}
+    {# Scrolling middle — order: alert -> A/B -> missed.
+       Step count N = (alert raised ? 1 : 0) + (comparison shown ? 1 : 0) + 1, and
+       the "Step X of N" label appears only when there is more than one step. Each
+       card's own step number is its running position in that order. #}
+    {% set has_alert = alert_category != "no_alert" %}
+    {% set step_total = (1 if has_alert else 0) + (1 if show_ab_card else 0) + 1 %}
+    {% set show_steps = step_total >= 2 %}
     <div class="flex-1 space-y-6 overflow-y-auto px-4 py-5">
 
       {# 1. Alert card (first slot, consistent across real + synthetic). #}
       <section>
-        {% if alert_category != "no_alert" %}
+        {% if has_alert %}
         <div class="rounded-lg border border-amber-200 bg-amber-50 p-4">
-          <div class="flex flex-wrap items-center gap-2">
-            <span class="rounded-full bg-amber-200 px-2 py-0.5 text-xs font-semibold text-amber-900">&#9888; {{ alert_label }}</span>
-            <span class="text-sm font-medium text-slate-700">Is the AI&rsquo;s alert correct?</span>
-          </div>
+          {% if show_steps %}<p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Step 1 of {{ step_total }}</p>{% endif %}
+          <p class="mt-1 text-sm font-medium text-slate-700">The AI raised an alert on this letter: <span class="font-semibold">{{ alert_label }}</span></p>
           {% if alert_reason %}<p class="mt-2 text-sm italic text-slate-600">&ldquo;{{ alert_reason }}&rdquo;</p>{% endif %}
-          <div class="mt-3 flex flex-wrap gap-2">
+          <p class="mt-3 text-sm font-medium text-slate-700">Was this alert correct?</p>
+          <div class="mt-2 flex flex-wrap gap-2">
             {% for value, label in [("Correct", "✓ Correct"), ("Incorrect", "✗ Incorrect"), ("Mixed", "~ Mixed")] %}
             <label>
               <input type="radio" name="alert_verdict" value="{{ value }}" required class="peer sr-only">
@@ -58,19 +80,24 @@
             </label>
             {% endfor %}
           </div>
-          <textarea name="alert_comment" rows="2" placeholder="Comment (optional)" class="mt-3 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-compassion focus:outline-none focus:ring-1 focus:ring-compassion"></textarea>
+          <p class="mt-2 text-xs text-slate-500">Choose Mixed if it is only partly right.</p>
+          <textarea name="alert_comment" rows="2" placeholder="Why did you answer this way? Your answer helps us improve the AI." class="mt-3 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-compassion focus:outline-none focus:ring-1 focus:ring-compassion"></textarea>
         </div>
         {% else %}
         <div class="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-500">
-          No alert raised by the AI on this letter.
+          <p class="font-medium text-slate-700">The AI raised no alert on this letter.</p>
+          <p class="mt-1">Nothing to check here. If you think it should have raised one, you can say so in the last step.</p>
         </div>
         {% endif %}
       </section>
 
       {# 2. A/B preference — only for letters with a human translation (parity rule: identical boxes). #}
-      {% if show_ab_card %}
       <section>
-        <p class="text-sm font-medium text-slate-700">Which translation do you prefer?</p>
+        {% if show_ab_card %}
+        <div class="rounded-lg border border-slate-200 bg-white p-4">
+        {% if show_steps %}<p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Step {{ 2 if has_alert else 1 }} of {{ step_total }}</p>{% endif %}
+        <p class="mt-1 text-sm font-medium text-slate-700">Which translation reads better?</p>
+        <p class="mt-1 text-xs text-slate-500">Read both against the original, then pick the one you would be happier sending.</p>
         <div class="mt-2 grid grid-cols-2 gap-3">
           <div>
             <p class="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">A</p>
@@ -82,20 +109,29 @@
           </div>
         </div>
         <div class="mt-3 flex flex-wrap gap-2">
-          {% for value, label in [("A", "A preferred"), ("B", "B preferred"), ("Equivalent", "Equivalent")] %}
+          {% for value, label in [("A", "A is better"), ("B", "B is better"), ("Equivalent", "Equivalent")] %}
           <label>
-            <input type="radio" name="preference" value="{{ value }}" required class="peer sr-only">
+            <input type="radio" name="preference" value="{{ value }}" x-model="preference" required class="peer sr-only">
             <span class="block cursor-pointer rounded-full border border-slate-300 bg-white px-3 py-1 text-sm text-slate-700 peer-checked:border-compassion peer-checked:bg-compassion peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-compassion">{{ label }}</span>
           </label>
           {% endfor %}
         </div>
-        <textarea name="preference_comment" rows="2" placeholder="Comment (optional)" class="mt-3 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-compassion focus:outline-none focus:ring-1 focus:ring-compassion"></textarea>
+        <textarea name="preference_comment" rows="2" placeholder="Tell us why, it helps us improve the AI." x-bind:placeholder="preferenceCommentPlaceholder" class="mt-3 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-compassion focus:outline-none focus:ring-1 focus:ring-compassion"></textarea>
+        </div>
+        {% else %}
+        <div class="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-500">
+          <p class="font-medium text-slate-700">No translation to compare on this letter.</p>
+          <p class="mt-1">There is nothing to choose here, so you can go straight to the next step.</p>
+        </div>
+        {% endif %}
       </section>
-      {% endif %}
 
       {# 3. Missed-issue — required yes/no; the details reveal on "Yes" (Alpine x-show). #}
       <section>
-        <p class="text-sm font-medium text-slate-700">Did the AI miss anything?</p>
+        <div class="rounded-lg border border-slate-200 bg-white p-4">
+        {% if show_steps %}<p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Step {{ step_total }} of {{ step_total }}</p>{% endif %}
+        <p class="mt-1 text-sm font-medium text-slate-700">Did the AI miss a problem?</p>
+        <p class="mt-1 text-xs text-slate-500">Is there anything here the AI should have alerted but did not? This is about the AI&rsquo;s alerts, not the translation. For example a wrong name, unsafe content, or something unreadable.</p>
         <div class="mt-2 flex gap-2">
           {% for value, label in [("yes", "Yes"), ("no", "No")] %}
           <label>
@@ -115,15 +151,16 @@
           </select>
           <textarea name="missed_reason" x-bind:required="missedYes" rows="2" placeholder="What did the AI miss?" class="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-compassion focus:outline-none focus:ring-1 focus:ring-compassion"></textarea>
         </div>
+        </div>
       </section>
 
     </div>
 
     {# Submit bar — stays at the bottom of the right pane. #}
     <div class="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 bg-white px-4 py-3">
-      <p class="text-xs text-slate-400">All questions on this letter are required.</p>
+      <p class="text-xs text-slate-400">Answer the checks above, then save.</p>
       <button type="submit" class="inline-flex items-center justify-center rounded-lg bg-compassion px-6 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-compassion/90">
-        Submit evaluation
+        Save &amp; next letter &rarr;
       </button>
     </div>
 
