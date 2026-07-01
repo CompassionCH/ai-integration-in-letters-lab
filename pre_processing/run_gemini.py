@@ -9,8 +9,8 @@ Thin production driver over the shared core (`pre_processing.gemini` / `cost` /
 `assemble`); the benchmark (`benchmark.run`) is the research sibling over the same
 core. ZERO DATA RETENTION posture + Vertex/`.env` auth all live in `pre_processing.gemini`.
 
-  python -m pre_processing.run_gemini --prompt-version v1 --model gemini-3.5-flash --temperature 0.3
-  python -m pre_processing.run_gemini --prompt-version v1 --dry-run     # no network, no key
+  python -m pre_processing.run_gemini --prompt-version v2 --model gemini-3.5-flash --temperature 0.3
+  python -m pre_processing.run_gemini --prompt-version v2 --dry-run     # no network, no key
 """
 from __future__ import annotations
 
@@ -67,15 +67,15 @@ def safety_record(letter_id, prompt_version, model, processed_at) -> dict:
 
 # --------------------------------------------------------------------------- per-letter call
 
-def _call(client, letter, model, temperature):
+def _call(client, letter, model, prompt_version, temperature):
     """Thin wrapper: assemble the prompt + PDF for one letter and call the core."""
-    return gemini.call(client, build_prompt(letter, _STRATEGY), gemini.pdf_bytes(letter),
-                       model, temperature=temperature)
+    return gemini.call(client, build_prompt(letter, _STRATEGY, prompt_version=prompt_version),
+                       gemini.pdf_bytes(letter), model, temperature=temperature)
 
 
 def process_letter(client, letter, model, prompt_version, temperature, processed_at) -> dict:
     """Call Gemini for one letter and return its result record. Raises on API/parse error."""
-    resp = _call(client, letter, model, temperature)
+    resp = _call(client, letter, model, prompt_version, temperature)
     if not getattr(resp, "text", None):
         return safety_record(letter.id, prompt_version, model, processed_at)
     response = parse_response(resp.text)
@@ -119,7 +119,7 @@ def main():
 
     if args.dry_run:
         for letter in letters:
-            build_prompt(letter, _STRATEGY)
+            build_prompt(letter, _STRATEGY, prompt_version=args.prompt_version)
             gemini.pdf_bytes(letter)
         print(f"DRY RUN ok: prompts build + PDFs load for {len(letters)} letters "
               f"(model={args.model}, prompt_version={args.prompt_version}, strategy={_STRATEGY}). No call made.")

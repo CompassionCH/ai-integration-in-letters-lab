@@ -1,7 +1,7 @@
 """Strategy-aware prompt assembler for the translation + screening pipeline.
 
 Builds the per-letter prompt for one strategy (A / D / F, with an optional
-per-paragraph length budget) from the static `system_prompt_v1.md` template plus
+per-paragraph length budget) from the versioned `system_prompt_<version>.md` template plus
 the letter metadata. Pure string assembly; no IO beyond reading the prompt files.
 
 Canonical assembler for both the production runner (`pre_processing.run_gemini`,
@@ -24,7 +24,6 @@ from pathlib import Path
 from data.corpus import LetterMetadata
 
 _PROMPTS = Path("pre_processing/prompts")
-_SYSTEM_PROMPT = _PROMPTS / "system_prompt_v1.md"
 _SENSITIVE = _PROMPTS / "sensitive_countries.json"
 
 _LANG_NAMES = {"en": "English", "fr": "French", "de": "German", "it": "Italian"}
@@ -42,6 +41,16 @@ _COMMENT_RE = re.compile(r"<!--.*?-->\n?", re.DOTALL)
 
 def _sensitive_countries() -> set[str]:
     return set(json.loads(_SENSITIVE.read_text(encoding="utf-8"))["countries"])
+
+
+def _system_prompt_text(prompt_version: str) -> str:
+    """Read the system-prompt template for a prompt version (e.g. 'v1', 'v2').
+    This is what `--prompt-version` actually selects and runs."""
+    path = _PROMPTS / f"system_prompt_{prompt_version}.md"
+    if not path.exists():
+        raise FileNotFoundError(
+            f"no system prompt for version {prompt_version!r} (looked for {path})")
+    return path.read_text(encoding="utf-8")
 
 
 def _lang(code: str) -> str:
@@ -93,17 +102,20 @@ def _source_block(letter: LetterMetadata, strategy: str, *, budget: bool) -> str
     return "\n".join(lines)
 
 
-def build_prompt(letter: LetterMetadata, strategy: str, *, budget: bool = False) -> str:
+def build_prompt(letter: LetterMetadata, strategy: str, *, prompt_version: str = "v1",
+                 budget: bool = False) -> str:
     """Assemble the full prompt for `letter` under `strategy`.
 
-    The faith-content block is kept only for sponsor->child letters whose recipient
-    country is on the sensitive list; it is dropped otherwise. `budget=True` adds
-    per-paragraph length hints (strategy F only).
+    `prompt_version` selects the system-prompt template (`system_prompt_<version>.md`);
+    the production runner passes the value of its `--prompt-version` flag. The
+    faith-content block is kept only for sponsor->child letters whose recipient country
+    is on the sensitive list; it is dropped otherwise. `budget=True` adds per-paragraph
+    length hints (strategy F only).
     """
     if strategy not in _STRATEGIES:
         raise ValueError(f"unknown strategy {strategy!r} (expected one of {sorted(_STRATEGIES)})")
 
-    text = _SYSTEM_PROMPT.read_text(encoding="utf-8")
+    text = _system_prompt_text(prompt_version)
 
     keep_block = letter.direction == "sponsor_to_child" and letter.country in _sensitive_countries()
     text = _BLOCK_RE.sub((lambda m: m.group("body") + "\n") if keep_block else "", text)

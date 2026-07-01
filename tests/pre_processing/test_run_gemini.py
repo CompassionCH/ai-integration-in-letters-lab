@@ -78,7 +78,7 @@ def test_process_letter_success(monkeypatch):
     import pre_processing.run_gemini as m
     resp = SimpleNamespace(text=VALID, usage_metadata=SimpleNamespace(
         prompt_token_count=100, candidates_token_count=40, thoughts_token_count=10))
-    monkeypatch.setattr(m, "_call", lambda client, letter, model, temperature: resp)
+    monkeypatch.setattr(m, "_call", lambda client, letter, model, prompt_version, temperature: resp)
     rec = process_letter(None, SimpleNamespace(id="R-003"), "gemini-3.5-flash", "v1", 0.3, "t")
     assert rec["letter_id"] == "R-003"
     assert rec["tokens_in"] == 100
