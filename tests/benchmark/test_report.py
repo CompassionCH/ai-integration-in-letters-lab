@@ -10,7 +10,9 @@ import json
 from pathlib import Path
 
 from data.corpus import load_corpus
-from benchmark.report import build_report, _render_pdf, LetterView
+from benchmark.report import (
+    build_report, _render_pdf, LetterView, _normalize_envelope, _discover_production_columns,
+)
 
 
 # --------------------------------------------------------------------------- builders
@@ -306,3 +308,111 @@ def test_render_pdf_embed_mode_inlines_base64(tmp_path):
     pdf.write_bytes(b"%PDF-1.4 test bytes")
     out = _render_pdf(_letterview(str(pdf)), True, "embed", tmp_path)
     assert "src='data:application/pdf;base64," in out
+
+
+# --------------------------------------------------------------------------- envelope normalization
+
+def test_normalize_nested_benchmark_envelope():
+    raw = {"letter_id": "R-1", "model": "m", "strategy": "F",
+           "response": {"translations": [{"sequence": 1, "text": "hi"}],
+                        "alert": {"category": "no_alert", "reason": "ok"}},
+           "telemetry": {"tokens_in": 3, "tokens_out": 2, "cost_usd": 0.001}}
+    env = _normalize_envelope(raw)
+    assert env["translations"] == [{"sequence": 1, "text": "hi"}]
+    assert env["alert"] == {"category": "no_alert", "reason": "ok"}
+    assert env["telemetry"] == {"tokens_in": 3, "tokens_out": 2, "cost_usd": 0.001}
+
+
+def test_normalize_flat_production_envelope():
+    # the shape pre_processing.run_gemini.build_record writes: everything top-level, no
+    # "response" wrapper, tokens as tokens_in/tokens_out, cost as cost_usd.
+    raw = {"letter_id": "SI-020", "prompt_version": "v2", "model": "gemini-3.5-flash",
+           "strategy": "F",
+           "translations": [{"sequence": 1, "text": "Dear Bwambale"}],
+           "alert": {"category": "content_inappropriate", "reason": "replica weapon"},
+           "tokens_in": 4245, "tokens_out": 1593, "cost_usd": 0.020705,
+           "safety_filter_status": "ok"}
+    env = _normalize_envelope(raw)
+    assert env["translations"] == [{"sequence": 1, "text": "Dear Bwambale"}]
+    assert env["alert"]["category"] == "content_inappropriate"
+    assert env["telemetry"]["tokens_in"] == 4245
+    assert env["telemetry"]["tokens_out"] == 1593
+    assert env["telemetry"]["total_tokens"] == 4245 + 1593  # synthesized
+    assert env["telemetry"]["cost_usd"] == 0.020705
+
+
+def test_normalize_none_is_empty():
+    assert _normalize_envelope(None) == {}
+
+
+# --------------------------------------------------------------------------- production (flat) mode
+
+def _write_flat_result(results_dir, version, letter_id, *, model="gemini-3.5-flash",
+                       strategy="F", translations=None, category=None, reason="",
+                       tokens_in=0, tokens_out=0, cost_usd=0.0, safety="ok"):
+    """Write a result in the flat production layout `<results-dir>/<version>/<id>.json`.
+
+    Mirrors pre_processing.run_gemini.build_record: no `response` wrapper, tokens
+    top-level. Returns the version dir (what --results-dir would point at).
+    """
+    dest = Path(results_dir) / version
+    dest.mkdir(parents=True, exist_ok=True)
+    record = {
+        "letter_id": letter_id, "prompt_version": version, "model": model, "strategy": strategy,
+        "translations": [{"sequence": s, "text": t} for s, t in (translations or [])],
+        "tokens_in": tokens_in, "tokens_out": tokens_out, "cost_usd": cost_usd,
+        "safety_filter_status": safety,
+    }
+    if category is not None:
+        record["alert"] = {"category": category, "reason": reason}
+    (dest / f"{letter_id}.json").write_text(json.dumps(record), encoding="utf-8")
+    return dest
+
+
+def test_production_mode_reads_flat_dir_and_envelope(tmp_path):
+    corpus = load_corpus(_write_corpus(tmp_path, [_valid_letter("R-017")]))
+    rd = _write_flat_result(tmp_path / "results", "v2", "R-017",
+                            translations=[(1, "Caro sponsor"), (2, "ciao")],
+                            category="no_alert", reason="No issue detected.",
+                            tokens_in=4357, tokens_out=1326, cost_usd=0.018469)
+    # production mode: --models / --strategies come from the files (passed empty here)
+    cell = build_report(corpus, rd, ["gemini-3.5-flash"], ["F"]).letters[0].cells[0]
+    assert cell.found is True
+    assert cell.translations == {1: "Caro sponsor", 2: "ciao"}
+    assert cell.alert_category == "no_alert"
+    assert cell.alert_reason == "No issue detected."
+    assert cell.telemetry["cost_usd"] == 0.018469
+    assert cell.telemetry["total_tokens"] == 4357 + 1326
+
+
+def test_production_mode_missing_file_is_no_result(tmp_path):
+    corpus = load_corpus(_write_corpus(tmp_path, [_valid_letter("R-017"), _valid_letter("R-018")]))
+    rd = _write_flat_result(tmp_path / "results", "v2", "R-017",
+                            translations=[(1, "x")], category="no_alert")
+    by = {lv.id: lv for lv in build_report(corpus, rd, ["gemini-3.5-flash"], ["F"]).letters}
+    assert by["R-017"].cells[0].found is True
+    assert by["R-018"].cells[0].found is False  # no flat file for R-018
+
+
+def test_production_mode_verdict_against_gold(tmp_path):
+    corpus = load_corpus(_write_corpus(tmp_path, [_gold_letter("SI-020", category="content_inappropriate")]))
+    rd = _write_flat_result(tmp_path / "results", "v2", "SI-020",
+                            translations=[(1, "x")], category="content_inappropriate",
+                            reason="replica weapon")
+    cell = build_report(corpus, rd, ["gemini-3.5-flash"], ["F"]).letters[0].cells[0]
+    assert cell.verdict == "exact"
+    assert cell.verdict_class == "pass"
+
+
+def test_discover_production_columns(tmp_path):
+    rd = _write_flat_result(tmp_path / "results", "v2", "R-017", translations=[(1, "x")], category="no_alert")
+    _write_flat_result(tmp_path / "results", "v2", "S-019", translations=[(1, "y")], category="no_alert")
+    models, strategies = _discover_production_columns(rd)
+    assert models == ["gemini-3.5-flash"]
+    assert strategies == ["F"]
+
+
+def test_discover_production_columns_empty_dir(tmp_path):
+    rd = tmp_path / "empty"
+    rd.mkdir()
+    assert _discover_production_columns(rd) == ([], [])

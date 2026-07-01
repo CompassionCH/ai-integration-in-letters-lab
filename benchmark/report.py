@@ -14,11 +14,22 @@ it must stay under the gitignored `benchmark/results/...` path and must never be
 committed, pushed, or uploaded anywhere. Only this generator is shared; each user runs
 it against their own local results.
 
+It reads either offline layout: the benchmark's `<results-dir>/<model>/<strategy>/<letter>.json`
+(with a "response"/"telemetry" envelope), or — with `--production` — the flat
+`results/<prompt_version>/<letter>.json` the pre-compute runner writes (payload top-level).
+`--production` derives the model + strategy from the files, so it needs no `--models`.
+
 Run from the repo root, e.g.:
+  # benchmark run (research: several models/strategies to compare)
   PYTHONPATH=. .venv/bin/python -m benchmark.report \\
     --corpus letters/corpus.json --results-dir benchmark/results/v1c \\
     --models gemini-3.5-flash,gemini-3.1-pro-preview --strategies F \\
     --out benchmark/results/v1c/report.html
+
+  # production run (review the locked prompt over the whole corpus, no shim)
+  PYTHONPATH=. .venv/bin/python -m benchmark.report --production \\
+    --corpus letters/corpus.json --results-dir pre_processing/results/v2 \\
+    --out benchmark/results/v2_review/report.html --pdf embed
 """
 from __future__ import annotations
 
@@ -88,21 +99,65 @@ class ReportView:
 # --------------------------------------------------------------------------- assembly
 
 def _result_path(results_dir: Path, model: str, strategy: str, letter_id: str) -> Path:
+    """Benchmark layout: <results-dir>/<model>/<strategy>/<letter>.json."""
     return Path(results_dir) / model / strategy / f"{letter_id}.json"
 
 
+def _flat_result_path(results_dir: Path, letter_id: str) -> Path:
+    """Production layout: <results-dir>/<letter>.json (the pre-compute runner writes
+    one flat file per letter under results/<prompt_version>/)."""
+    return Path(results_dir) / f"{letter_id}.json"
+
+
+def _result_exists(results_dir: Path, model: str, strategy: str, letter_id: str) -> bool:
+    """True if a result for this letter exists in either the benchmark or the flat layout."""
+    return (_result_path(results_dir, model, strategy, letter_id).exists()
+            or _flat_result_path(results_dir, letter_id).exists())
+
+
 def _read_result(results_dir: Path, model: str, strategy: str, letter_id: str) -> dict | None:
+    """Read one result, trying the benchmark layout then the flat production layout.
+
+    The two offline writers differ on disk: benchmark.run nests under <model>/<strategy>/
+    and wraps the payload in "response"/"telemetry"; the production runner writes a flat
+    <letter>.json with everything top-level. This reconciles the *path*;
+    _normalize_envelope reconciles the *payload shape*.
+    """
     f = _result_path(results_dir, model, strategy, letter_id)
     if not f.exists():
-        return None
+        f = _flat_result_path(results_dir, letter_id)
+        if not f.exists():
+            return None
     return json.loads(f.read_text(encoding="utf-8"))
 
 
-def _pred_category(raw: dict | None) -> str | None:
+def _normalize_envelope(raw: dict | None) -> dict:
+    """Canonical {translations, alert, telemetry} from either result envelope.
+
+    benchmark.run -> {"response": {"translations", "alert"}, "telemetry": {...}}
+    run_gemini    -> flat {"translations", "alert", "tokens_in", "tokens_out", "cost_usd", ...}
+
+    Returns {} for a missing result. For the flat envelope, telemetry is rebuilt with a
+    synthesized total_tokens so the telemetry table renders the same in both modes.
+    """
     if not raw:
-        return None
-    resp = raw.get("response") or {}
-    return (resp.get("alert") or {}).get("category")
+        return {}
+    if "response" in raw:  # nested benchmark envelope
+        resp = raw.get("response") or {}
+        return {"translations": resp.get("translations") or [],
+                "alert": resp.get("alert") or {},
+                "telemetry": raw.get("telemetry")}
+    tin, tout = raw.get("tokens_in"), raw.get("tokens_out")  # flat production envelope
+    telemetry = {"tokens_in": tin, "tokens_out": tout,
+                 "total_tokens": (tin or 0) + (tout or 0),
+                 "cost_usd": raw.get("cost_usd")}
+    return {"translations": raw.get("translations") or [],
+            "alert": raw.get("alert") or {},
+            "telemetry": telemetry}
+
+
+def _pred_category(raw: dict | None) -> str | None:
+    return (_normalize_envelope(raw).get("alert") or {}).get("category")
 
 
 def _verdict(letter_id: str, gold: str | None, pred: str | None) -> tuple[str | None, str]:
@@ -133,13 +188,13 @@ def _build_cell(results_dir: Path, model: str, strategy: str, letter: LetterMeta
     if raw is None:
         verdict, vclass = _verdict(letter.id, gold, None)
         return Cell(model, strategy, False, {}, None, None, None, verdict, vclass)
-    resp = raw.get("response") or {}
-    translations = {t["sequence"]: t.get("text", "") for t in (resp.get("translations") or [])}
-    alert = resp.get("alert") or {}
+    env = _normalize_envelope(raw)
+    translations = {t["sequence"]: t.get("text", "") for t in (env.get("translations") or [])}
+    alert = env.get("alert") or {}
     pred = alert.get("category")
     verdict, vclass = _verdict(letter.id, gold, pred)
     return Cell(model, strategy, True, translations, pred, alert.get("reason"),
-                raw.get("telemetry"), verdict, vclass)
+                env.get("telemetry"), verdict, vclass)
 
 
 def _aligned_rows(cells: list) -> list:
@@ -191,6 +246,28 @@ def build_report(letters: list, results_dir, models: list, strategies: list) -> 
         ))
     summary, has_gt = _build_summary(letters, results_dir, models, strategies)
     return ReportView(models, strategies, len(views), views, summary, has_gt)
+
+
+def _discover_production_columns(results_dir) -> tuple[list, list]:
+    """(models, strategies) stamped in a flat production results dir (<dir>/<id>.json).
+
+    A production pre-compute run is homogeneous (one model, strategy F), so these are
+    normally singletons; used to label the single column without the caller naming the
+    model. Returns ([], []) for an empty or absent directory.
+    """
+    models, strategies = set(), set()
+    for f in sorted(Path(results_dir).glob("*.json")):
+        if f.name.startswith("_"):  # keep helper files (e.g. _failures) out of the columns
+            continue
+        try:
+            raw = json.loads(f.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        if raw.get("model"):
+            models.add(raw["model"])
+        if raw.get("strategy"):
+            strategies.add(raw["strategy"])
+    return sorted(models), sorted(strategies)
 
 
 # --------------------------------------------------------------------------- render (UI layer)
@@ -397,9 +474,17 @@ def render_html(report: ReportView, pdf_mode: str = "link", out_dir=Path(".")) -
 def main():
     ap = argparse.ArgumentParser(description="Self-contained HTML benchmark review report")
     ap.add_argument("--corpus", required=True, help="corpus JSON ({version, letters:[...]})")
-    ap.add_argument("--results-dir", required=True, help="run dir holding <model>/<strategy>/<letter>.json")
-    ap.add_argument("--models", required=True, help="comma-separated model names")
+    ap.add_argument("--results-dir", required=True,
+                    help="benchmark run dir (<model>/<strategy>/<letter>.json) or, with --production, "
+                         "a flat production dir (results/<prompt_version>/<letter>.json)")
+    ap.add_argument("--models", default=None,
+                    help="comma-separated model names (required unless --production, which derives "
+                         "them from the result files)")
     ap.add_argument("--strategies", default="F", help="comma-separated strategies (default F)")
+    ap.add_argument("--production", action="store_true",
+                    help="read the flat production layout the pre-compute runner writes "
+                         "(results/<prompt_version>/<letter>.json, payload top-level); --models and "
+                         "--strategies are then derived from the result files themselves")
     ap.add_argument("--letters", default=None,
                     help="comma-separated letter ids to include; 'all' for every corpus letter; "
                          "default: letters with a result in this run (plus any carrying ground truth)")
@@ -409,10 +494,22 @@ def main():
                          "or 'embed' (base64, one portable file but large). Default link.")
     args = ap.parse_args()
 
-    models = [m.strip() for m in args.models.split(",") if m.strip()]
-    strategies = [s.strip() for s in args.strategies.split(",") if s.strip()]
     results_dir = Path(args.results_dir)
     corpus = load_corpus(args.corpus)
+
+    if args.production:
+        models, strategies = _discover_production_columns(results_dir)
+        if not models:
+            raise SystemExit(f"no result files found in {results_dir} — production mode reads "
+                             f"{results_dir}/<letter>.json written by the pre-compute runner")
+        if len(models) > 1 or len(strategies) > 1:
+            print(f"warning: production dir mixes stamps ({models} x {strategies}); "
+                  "a run is expected to be one model + one strategy, so results may span columns")
+    else:
+        if not args.models:
+            ap.error("--models is required (or pass --production to derive it from the results dir)")
+        models = [m.strip() for m in args.models.split(",") if m.strip()]
+        strategies = [s.strip() for s in args.strategies.split(",") if s.strip()]
 
     if args.letters and args.letters.strip().lower() == "all":
         selected = corpus
@@ -423,7 +520,7 @@ def main():
         selected = [
             l for l in corpus
             if l.ground_truth is not None
-            or any(_result_path(results_dir, m, s, l.id).exists() for m in models for s in strategies)
+            or any(_result_exists(results_dir, m, s, l.id) for m in models for s in strategies)
         ]
         skipped = len(corpus) - len(selected)
         if skipped:
