@@ -18,6 +18,8 @@ letters/synthetic/
 
 # Gemini pre-processing outputs (contain translations, alert reasons)
 pre_processing/results/
+# Archived older prompt-version outputs (also real-letter translations/alert reasons)
+pre_processing/results_archive/
 # Benchmark outputs (contain real-letter translations + alert reasons)
 benchmark/results/
 benchmark/results_backup/
